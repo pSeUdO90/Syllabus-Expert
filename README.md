@@ -108,15 +108,21 @@ syllabus-expert serve
 syllabus-expert review questions.json
 ```
 
-Then open http://127.0.0.1:8765.
+Then open http://127.0.0.1:8765 and log in.
+
+Default account: **admin** / **admin** (change this after first login by adding a new admin and deleting the default, or by creating teachers and students in Admin).
 
 | Page | What it does |
 | --- | --- |
+| `/login` | Username and password |
 | `/` | Dashboard with library stats |
-| `/upload` | Question PDF + optional answer-key PDF |
+| `/upload` | Question PDF + optional answer-key PDF (teacher/admin) |
 | `/library` | List, open, or delete saved papers |
 | `/review` | Edit stems, mark answers, show LaTeX solutions |
-| `/practice` | Quiz mode with a score at the end |
+| `/practice` | Quiz with subject, chapter, topic, question count, and time limit |
+| `/admin` | Users, subjects/chapters/topics, and tests from the question bank |
+
+Teachers and admins can open **Admin** to add students, teachers, and admins; maintain the subject tree; and assemble timed tests from extracted questions. Students log in and take practice or saved tests.
 
 The database defaults to `data/syllabus_expert.db`.
 

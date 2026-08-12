@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — Syllabus Expert</title>
+  <link rel="stylesheet" href="css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="login.html"><span class="brand-mark">SE</span> Syllabus Expert</a>
+  </header>
+  <div class="login-wrap">
+    <section class="card login-card">
+      <h1>Log in</h1>
+      <p class="lede">Enter your username and password to open the question bank.</p>
+      <form id="login-form" class="grid" style="display:grid;gap:12px;margin-top:18px">
+        <label class="field">Username
+          <input id="username" type="text" autocomplete="username" required />
+        </label>
+        <label class="field">Password
+          <input id="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn primary" type="submit">Enter</button>
+        <p class="hint">Default admin account: <strong>admin</strong> / <strong>admin</strong></p>
+        <p class="hint" id="login-error" style="color:var(--red)"></p>
+      </form>
+    </section>
+  </div>
+  <script src="js/site.js"></script>
+  <script>
+    document.getElementById("login-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const err = document.getElementById("login-error");
+      err.textContent = "";
+      try {
+        await SE.postJson("/api/login", {
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value,
+        });
+        location.href = "index.html";
+      } catch (ex) {
+        err.textContent = String(ex.message || ex);
+      }
+    };
+  </script>
+</body>
+</html>

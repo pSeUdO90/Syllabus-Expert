@@ -32,6 +32,17 @@ def _start(db: Path, uploads: Path) -> tuple[ThreadingHTTPServer, HTTPConnection
     return server, HTTPConnection(host, port, timeout=30)
 
 
+def _login(conn: HTTPConnection) -> dict[str, str]:
+    body = json.dumps({"username": "admin", "password": "admin"}).encode()
+    conn.request("POST", "/api/login", body, {"Content-Type": "application/json"})
+    res = conn.getresponse()
+    payload = res.read()
+    assert res.status == 200, payload
+    cookie = res.getheader("Set-Cookie")
+    assert cookie
+    return {"Cookie": cookie.split(";", 1)[0]}
+
+
 def test_review_server_roundtrip(tmp_path: Path):
     db = tmp_path / "bank.db"
     uploads = tmp_path / "uploads"
@@ -57,6 +68,12 @@ def test_review_server_roundtrip(tmp_path: Path):
     server, conn = _start(db, uploads)
     try:
         conn.request("GET", "/")
+        guest = conn.getresponse()
+        guest.read()
+        assert guest.status == 302
+
+        auth = _login(conn)
+        conn.request("GET", "/", headers=auth)
         home = conn.getresponse()
         assert home.status == 200
         html = home.read()
@@ -67,7 +84,7 @@ def test_review_server_roundtrip(tmp_path: Path):
         assert b"--bg" in html
         assert b"#12151c" in html
 
-        conn.request("GET", "/review")
+        conn.request("GET", "/review", headers=auth)
         review = conn.getresponse()
         assert review.status == 200
         review_html = review.read()
@@ -75,32 +92,34 @@ def test_review_server_roundtrip(tmp_path: Path):
         assert b"katex" in review_html
         assert b"--bg" in review_html
 
-        conn.request("GET", "/library")
+        conn.request("GET", "/library", headers=auth)
         library = conn.getresponse()
         assert library.status == 200
         assert b"Library" in library.read()
 
-        conn.request("GET", "/upload")
+        conn.request("GET", "/upload", headers=auth)
         upload = conn.getresponse()
         assert upload.status == 200
         assert b"Question paper PDF" in upload.read()
 
-        conn.request("GET", "/practice")
+        conn.request("GET", "/practice", headers=auth)
         practice = conn.getresponse()
         assert practice.status == 200
-        assert b"Start practice" in practice.read()
+        practice_html = practice.read()
+        assert b"Start practice" in practice_html
+        assert b"Time limit" in practice_html
 
         conn.request("GET", "/css/site.css")
         css = conn.getresponse()
         assert css.status == 200
         assert b"--bg" in css.read()
 
-        conn.request("GET", "/api/stats")
+        conn.request("GET", "/api/stats", headers=auth)
         stats = json.loads(conn.getresponse().read())
         assert stats["paper_count"] == 1
         assert stats["question_count"] == 1
 
-        conn.request("GET", "/api/paper")
+        conn.request("GET", "/api/paper", headers=auth)
         payload = json.loads(conn.getresponse().read())
         assert payload["mcqs"][0]["subject"] == "Physics"
         assert payload["title"] == "Practice Paper of NEET (UG) - 06"
@@ -112,17 +131,17 @@ def test_review_server_roundtrip(tmp_path: Path):
             "PUT",
             "/api/paper",
             body=body,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", **auth},
         )
         assert conn.getresponse().status == 200
         saved = get_paper(db, payload["id"])
         assert saved is not None
         assert saved.mcqs[0].answer == "A"
 
-        conn.request("DELETE", f"/api/paper?id={payload['id']}")
+        conn.request("DELETE", f"/api/paper?id={payload['id']}", headers=auth)
         deleted = json.loads(conn.getresponse().read())
         assert deleted["ok"] is True
-        conn.request("GET", "/api/stats")
+        conn.request("GET", "/api/stats", headers=auth)
         empty_stats = json.loads(conn.getresponse().read())
         assert empty_stats["paper_count"] == 0
     finally:
@@ -140,6 +159,7 @@ def test_ingest_upload_endpoint(tmp_path: Path):
     )
     server, conn = _start(db, uploads)
     try:
+        auth = _login(conn)
         boundary = "----CursorBoundary"
         chunks = []
         for name, path in (("paper", paper_pdf), ("answers", key_pdf)):
@@ -170,6 +190,7 @@ def test_ingest_upload_endpoint(tmp_path: Path):
             headers={
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
                 "Content-Length": str(len(body)),
+                **auth,
             },
         )
         response = conn.getresponse()

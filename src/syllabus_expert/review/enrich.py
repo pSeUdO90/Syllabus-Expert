@@ -54,6 +54,8 @@ def infer_topic(question: str, subject: str) -> str:
 def enrich_mcq(mcq: MCQ) -> MCQ:
     if not mcq.subject:
         mcq.subject = infer_subject(mcq.number)
+    if not mcq.chapter:
+        mcq.chapter = mcq.subject
     if not mcq.topic:
         mcq.topic = infer_topic(mcq.question, mcq.subject or "General")
     if not mcq.difficulty:

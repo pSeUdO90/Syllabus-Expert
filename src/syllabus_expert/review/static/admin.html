@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Syllabus Expert</title>
+  <link rel="stylesheet" href="css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="index.html"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="library.html">Library</a>
+      <a href="upload.html">Upload</a>
+      <a href="review.html">Review</a>
+      <a href="practice.html">Practice</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <h1>Admin panel</h1>
+    <p class="lede">Manage people, the subject tree, and tests built from the question bank.</p>
+    <div class="tabs">
+      <button class="ghost active" data-tab="users">Users</button>
+      <button class="ghost" data-tab="catalog">Subjects &amp; topics</button>
+      <button class="ghost" data-tab="tests">Tests</button>
+    </div>
+
+    <section id="tab-users">
+      <div class="card" style="padding:18px">
+        <h2>Add user</h2>
+        <div class="inline-form" id="user-form">
+          <label class="field">Username <input id="u-name" type="text" /></label>
+          <label class="field">Password <input id="u-pass" type="password" /></label>
+          <label class="field">Display name <input id="u-display" type="text" /></label>
+          <label class="field">Role
+            <select id="u-role">
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button class="btn primary" id="u-add" type="button">Add</button>
+        </div>
+        <table class="table" style="margin-top:16px">
+          <thead><tr><th>Username</th><th>Name</th><th>Role</th><th></th></tr></thead>
+          <tbody id="user-rows"></tbody>
+        </table>
+        <p class="hint" id="users-hint">Only admins can add or remove accounts.</p>
+      </div>
+    </section>
+
+    <section id="tab-catalog" hidden>
+      <div class="admin-grid">
+        <div class="card" style="padding:18px">
+          <h2>Add to catalog</h2>
+          <div class="inline-form">
+            <label class="field">New subject <input id="s-name" type="text" placeholder="Physics" /></label>
+            <button class="btn primary" id="s-add" type="button">Add subject</button>
+          </div>
+          <div class="inline-form" style="margin-top:12px">
+            <label class="field">Subject
+              <select id="c-subject"></select>
+            </label>
+            <label class="field">New chapter <input id="c-name" type="text" /></label>
+            <button class="ghost" id="c-add" type="button">Add chapter</button>
+          </div>
+          <div class="inline-form" style="margin-top:12px">
+            <label class="field">Chapter
+              <select id="t-chapter"></select>
+            </label>
+            <label class="field">New sub-topic <input id="t-name" type="text" /></label>
+            <button class="ghost" id="t-add" type="button">Add topic</button>
+          </div>
+        </div>
+        <div class="tree" id="tree"></div>
+      </div>
+    </section>
+
+    <section id="tab-tests" hidden>
+      <div class="card" style="padding:18px">
+        <h2>Create test from question bank</h2>
+        <div class="inline-form">
+          <label class="field">Title <input id="test-title" type="text" placeholder="NEET Physics set A" /></label>
+          <label class="field">Subject <select id="test-subject"></select></label>
+          <label class="field">Chapter <select id="test-chapter"></select></label>
+          <label class="field">Topic <select id="test-topic"></select></label>
+          <label class="field">Questions <input id="test-count" type="text" value="10" /></label>
+          <label class="field">Time (minutes) <input id="test-time" type="text" value="15" /></label>
+          <button class="btn primary" id="test-add" type="button">Create test</button>
+        </div>
+        <table class="table" style="margin-top:16px">
+          <thead><tr><th>Title</th><th>Filter</th><th>Qs</th><th>Time</th><th></th></tr></thead>
+          <tbody id="test-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="js/site.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let taxonomy = [];
+    let me = null;
+
+    document.querySelectorAll(".tabs button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        ["users", "catalog", "tests"].forEach((name) => {
+          $(`tab-${name}`).hidden = btn.dataset.tab !== name;
+        });
+      };
+    });
+
+    function optionList(items, extra) {
+      const head = extra || [];
+      return head.concat(items).map((item) =>
+        `<option value="${SE.esc(item.value)}">${SE.esc(item.label)}</option>`
+      ).join("");
+    }
+
+    function fillSubjectSelects() {
+      const subjects = taxonomy.map((s) => ({ value: s.name, label: s.name, id: s.id }));
+      $("c-subject").innerHTML = optionList(subjects.map((s) => ({ value: s.id, label: s.name })));
+      $("test-subject").innerHTML = optionList(
+        subjects.map((s) => ({ value: s.name, label: s.name })),
+        [{ value: "", label: "Any subject" }]
+      );
+      fillChapterSelects();
+    }
+
+    function fillChapterSelects() {
+      const subjectId = Number($("c-subject").value);
+      const subject = taxonomy.find((s) => s.id === subjectId);
+      const chapters = subject ? subject.chapters : [];
+      $("t-chapter").innerHTML = optionList(chapters.map((c) => ({ value: c.id, label: c.name })));
+      const testSubject = taxonomy.find((s) => s.name === $("test-subject").value);
+      const testChapters = testSubject ? testSubject.chapters : [];
+      $("test-chapter").innerHTML = optionList(
+        testChapters.map((c) => ({ value: c.name, label: c.name })),
+        [{ value: "", label: "Any chapter" }]
+      );
+      fillTopicSelect();
+    }
+
+    function fillTopicSelect() {
+      const testSubject = taxonomy.find((s) => s.name === $("test-subject").value);
+      const chapter = (testSubject?.chapters || []).find((c) => c.name === $("test-chapter").value);
+      const topics = chapter ? chapter.topics : [];
+      $("test-topic").innerHTML = optionList(
+        topics.map((t) => ({ value: t.name, label: t.name })),
+        [{ value: "", label: "Any topic" }]
+      );
+    }
+
+    async function loadUsers() {
+      if (me.role !== "admin") {
+        $("user-form").hidden = true;
+        $("users-hint").textContent = "Ask an admin to add accounts. Teachers can still manage subjects and tests.";
+        $("user-rows").innerHTML = "";
+        return;
+      }
+      const users = await SE.getJson("/api/users");
+      $("user-rows").innerHTML = users.map((u) => `
+        <tr>
+          <td>${SE.esc(u.username)}</td>
+          <td>${SE.esc(u.display_name)}</td>
+          <td>${SE.esc(u.role)}</td>
+          <td><button class="ghost danger" data-del-user="${u.id}">Delete</button></td>
+        </tr>
+      `).join("");
+      $("user-rows").querySelectorAll("[data-del-user]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Delete this user?")) return;
+          const res = await fetch(SE.url("/api/users?id=" + btn.dataset.delUser), { method: "DELETE" });
+          const payload = await res.json();
+          if (!res.ok) return SE.toast(payload.error || "Failed");
+          loadUsers();
+        };
+      });
+    }
+
+    async function loadTaxonomy() {
+      taxonomy = await SE.getJson("/api/taxonomy");
+      fillSubjectSelects();
+      $("tree").innerHTML = taxonomy.map((s) => `
+        <article class="tree-item">
+          <div class="title-row">
+            <h3>${SE.esc(s.name)}</h3>
+            <button class="icon-btn danger" data-del-subject="${s.id}" title="Delete subject">×</button>
+          </div>
+          ${(s.chapters || []).map((c) => `
+            <div style="margin:8px 0 0 8px">
+              <strong>${SE.esc(c.name)}</strong>
+              <button class="ghost danger" style="padding:2px 8px" data-del-chapter="${c.id}">Delete chapter</button>
+              <div class="tags" style="padding:8px 0 0">
+                ${(c.topics || []).map((t) => `
+                  <span class="tag">${SE.esc(t.name)}
+                    <button class="ghost" style="padding:0 6px;border:0" data-del-topic="${t.id}">×</button>
+                  </span>
+                `).join("") || '<span class="hint">No sub-topics</span>'}
+              </div>
+            </div>
+          `).join("") || '<p class="hint">No chapters yet</p>'}
+        </article>
+      `).join("") || '<p class="hint">No subjects yet</p>';
+      $("tree").querySelectorAll("[data-del-subject]").forEach((b) => b.onclick = () => del("/api/subjects?id=" + b.dataset.delSubject));
+      $("tree").querySelectorAll("[data-del-chapter]").forEach((b) => b.onclick = () => del("/api/chapters?id=" + b.dataset.delChapter));
+      $("tree").querySelectorAll("[data-del-topic]").forEach((b) => b.onclick = () => del("/api/topics?id=" + b.dataset.delTopic));
+    }
+
+    async function del(path) {
+      const res = await fetch(SE.url(path), { method: "DELETE" });
+      const payload = await res.json();
+      if (!res.ok) return SE.toast(payload.error || "Failed");
+      loadTaxonomy();
+    }
+
+    async function loadTests() {
+      const tests = await SE.getJson("/api/tests");
+      $("test-rows").innerHTML = tests.map((t) => `
+        <tr>
+          <td>${SE.esc(t.title)}</td>
+          <td>${SE.esc([t.subject, t.chapter, t.topic].filter(Boolean).join(" / ") || "All")}</td>
+          <td>${t.question_count}</td>
+          <td>${t.time_limit_minutes ? t.time_limit_minutes + " min" : "—"}</td>
+          <td>
+            <a class="ghost" href="practice.html?test=${t.id}">Open</a>
+            <button class="ghost danger" data-del-test="${t.id}">Delete</button>
+          </td>
+        </tr>
+      `).join("") || `<tr><td colspan="5" class="hint">No tests yet</td></tr>`;
+      $("test-rows").querySelectorAll("[data-del-test]").forEach((b) => {
+        b.onclick = async () => {
+          await fetch(SE.url("/api/tests?id=" + b.dataset.delTest), { method: "DELETE" });
+          loadTests();
+        };
+      });
+    }
+
+    $("u-add").onclick = async () => {
+      try {
+        await SE.postJson("/api/users", {
+          username: $("u-name").value,
+          password: $("u-pass").value,
+          display_name: $("u-display").value,
+          role: $("u-role").value,
+        });
+        $("u-name").value = $("u-pass").value = $("u-display").value = "";
+        SE.toast("User added");
+        loadUsers();
+      } catch (ex) { SE.toast(String(ex.message || ex)); }
+    };
+    $("s-add").onclick = async () => {
+      try {
+        await SE.postJson("/api/subjects", { name: $("s-name").value });
+        $("s-name").value = "";
+        loadTaxonomy();
+      } catch (ex) { SE.toast(String(ex.message || ex)); }
+    };
+    $("c-add").onclick = async () => {
+      try {
+        await SE.postJson("/api/chapters", { subject_id: Number($("c-subject").value), name: $("c-name").value });
+        $("c-name").value = "";
+        loadTaxonomy();
+      } catch (ex) { SE.toast(String(ex.message || ex)); }
+    };
+    $("t-add").onclick = async () => {
+      try {
+        await SE.postJson("/api/topics", { chapter_id: Number($("t-chapter").value), name: $("t-name").value });
+        $("t-name").value = "";
+        loadTaxonomy();
+      } catch (ex) { SE.toast(String(ex.message || ex)); }
+    };
+    $("test-add").onclick = async () => {
+      try {
+        await SE.postJson("/api/tests", {
+          title: $("test-title").value,
+          subject: $("test-subject").value,
+          chapter: $("test-chapter").value,
+          topic: $("test-topic").value,
+          question_count: Number($("test-count").value || 10),
+          time_limit_minutes: Number($("test-time").value || 0),
+        });
+        SE.toast("Test created");
+        loadTests();
+      } catch (ex) { SE.toast(String(ex.message || ex)); }
+    };
+    $("c-subject").onchange = fillChapterSelects;
+    $("test-subject").onchange = fillChapterSelects;
+    $("test-chapter").onchange = fillTopicSelect;
+
+    (async () => {
+      me = await SE.requireAuth();
+      if (!me) return;
+      if (me.role !== "admin" && me.role !== "teacher") {
+        location.href = "index.html";
+        return;
+      }
+      await loadUsers();
+      await loadTaxonomy();
+      await loadTests();
+    })();
+  </script>
+</body>
+</html>

@@ -25,6 +25,7 @@ class MCQ(BaseModel):
     )
     source: Literal["heuristic", "agent"] = "heuristic"
     subject: str | None = None
+    chapter: str | None = None
     topic: str | None = None
     difficulty: str | None = None
 

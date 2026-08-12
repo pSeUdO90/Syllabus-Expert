@@ -351,16 +351,31 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); }
   </header>
   <div class="wrap">
     <h1>Practice</h1>
-    <p class="lede">Attempt a saved paper. Options stay hidden until you pick one. Score is shown at the end.</p>
+    <p class="lede">Pick a saved test or build a custom set from the bank. Choose subject, chapter, topic, how many questions, and a time limit.</p>
 
     <section class="card" id="setup" style="padding:22px">
-      <div class="filters" style="margin:0">
-        <div class="left">
-          <label class="field">Paper
+      <div class="filters" style="margin:0;display:grid;gap:12px">
+        <div class="left" style="flex-wrap:wrap">
+          <label class="field">Saved test
+            <select id="test-select"></select>
+          </label>
+          <label class="field">Paper (optional)
             <select id="paper-select"></select>
           </label>
           <label class="field">Subject
             <select id="subject-filter"></select>
+          </label>
+          <label class="field">Chapter
+            <select id="chapter-filter"></select>
+          </label>
+          <label class="field">Topic
+            <select id="topic-filter"></select>
+          </label>
+          <label class="field">Number of questions
+            <input id="q-count" type="text" value="10" style="min-width:90px" />
+          </label>
+          <label class="field">Time limit (minutes)
+            <input id="q-time" type="text" value="15" style="min-width:90px" />
           </label>
         </div>
         <button class="btn primary" id="start-btn">Start practice</button>
@@ -370,6 +385,7 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); }
     <section id="quiz" hidden>
       <div class="filters">
         <div class="summary" id="progress">0 / 0</div>
+        <div class="timer" id="timer"></div>
         <div class="pager">
           <button class="icon-btn" id="prev" title="Previous">‹</button>
           <span id="page-label">1 / 1</span>
@@ -393,108 +409,94 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); }
   </div>
   <div class="toast" id="toast"></div>
   <script>
-(function () {
-  const file = (location.pathname.split("/").pop() || "index.html").replace(/\/$/, "") || "index.html";
-  const current = file.replace(/\.html$/, "") || "index";
-  document.querySelectorAll(".site-nav nav a[href]").forEach((a) => {
-    const href = (a.getAttribute("href") || "").split("?")[0];
-    const key = href.replace(/^.*\//, "").replace(/\.html$/, "") || "index";
-    if (key === current || ((current === "index" || current === "") && key === "index")) {
-      a.classList.add("active");
-    }
-  });
-})();
-
-window.SE = {
-  root() {
-    const parts = location.pathname.split("/").filter(Boolean);
-    const last = parts[parts.length - 1] || "";
-    const pages = new Set([
-      "library", "library.html", "upload", "upload.html",
-      "review", "review.html", "practice", "practice.html", "index.html",
-    ]);
-    if (pages.has(last) || last === "") parts.pop();
-    return parts.length ? "/" + parts.join("/") : "";
-  },
-  url(path) {
-    if (!path.startsWith("/")) path = "/" + path;
-    return this.root() + path;
-  },
-  page(name, query) {
-    const suffix = query ? (query.startsWith("?") ? query : "?" + query) : "";
-    return name + suffix;
-  },
-  esc(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[ch]));
-  },
-  toast(msg) {
-    let el = document.getElementById("toast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "toast";
-      el.className = "toast";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.display = "block";
-    setTimeout(() => { el.style.display = "none"; }, 2400);
-  },
-  typesetMath(root) {
-    if (!window.renderMathInElement || !root) return;
-    window.renderMathInElement(root, {
-      delimiters: [
-        { left: "$$", right: "$$", display: true },
-        { left: "$", right: "$", display: false },
-        { left: "\\[", right: "\\]", display: true },
-        { left: "\\(", right: "\\)", display: false },
-      ],
-      throwOnError: false,
-      ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
-    });
-  },
-  async getJson(path) {
-    const res = await fetch(this.url(path));
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error || res.statusText);
-    return payload;
-  },
-};
-
-</script>
-  <script>
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
+    let taxonomy = [];
     let papers = [];
-    let paper = null;
     let items = [];
     let index = 0;
     let picks = {};
     let started = false;
+    let remaining = 0;
+    let tick = null;
+    let timeLimit = 0;
 
-    function currentItems() {
-      const filter = $("subject-filter").value;
-      const all = paper.mcqs || [];
-      if (!filter || filter === "All Subjects") return all;
-      return all.filter((q) => (q.subject || "General") === filter);
+    function allOption(label) {
+      return `<option value="">${label}</option>`;
     }
 
-    async function loadList() {
+    function fillChapters() {
+      const subject = taxonomy.find((s) => s.name === $("subject-filter").value);
+      const chapters = subject ? subject.chapters : [];
+      $("chapter-filter").innerHTML = allOption("Any chapter") + chapters.map((c) =>
+        `<option>${SE.esc(c.name)}</option>`
+      ).join("");
+      fillTopics();
+    }
+
+    function fillTopics() {
+      const subject = taxonomy.find((s) => s.name === $("subject-filter").value);
+      const chapter = (subject?.chapters || []).find((c) => c.name === $("chapter-filter").value);
+      const topics = chapter ? chapter.topics : [];
+      $("topic-filter").innerHTML = allOption("Any topic") + topics.map((t) =>
+        `<option>${SE.esc(t.name)}</option>`
+      ).join("");
+    }
+
+    async function loadSetup() {
+      taxonomy = await SE.getJson("/api/taxonomy");
       papers = await SE.getJson("/api/papers");
-      const wanted = params.get("id");
-      $("paper-select").innerHTML = papers.map((p) =>
-        `<option value="${p.id}" ${String(p.id) === String(wanted) ? "selected" : ""}>${SE.esc(p.title)} (${p.question_count})</option>`
-      ).join("") || `<option value="">No papers yet</option>`;
-      if (!papers.length) return;
-      await loadPaper($("paper-select").value);
+      const tests = await SE.getJson("/api/tests");
+      $("test-select").innerHTML = allOption("Custom practice") + tests.map((t) =>
+        `<option value="${t.id}" ${String(t.id) === params.get("test") ? "selected" : ""}>${SE.esc(t.title)} (${t.question_count})</option>`
+      ).join("");
+      $("paper-select").innerHTML = allOption("All papers") + papers.map((p) =>
+        `<option value="${p.id}" ${String(p.id) === params.get("id") ? "selected" : ""}>${SE.esc(p.title)}</option>`
+      ).join("");
+      $("subject-filter").innerHTML = allOption("Any subject") + taxonomy.map((s) =>
+        `<option>${SE.esc(s.name)}</option>`
+      ).join("");
+      fillChapters();
+      if (params.get("test")) onTestChange();
     }
 
-    async function loadPaper(id) {
-      paper = await SE.getJson("/api/paper?id=" + id);
-      const subjects = ["All Subjects", ...new Set((paper.mcqs || []).map((q) => q.subject || "General"))];
-      $("subject-filter").innerHTML = subjects.map((s) => `<option>${SE.esc(s)}</option>`).join("");
-      $("review-link").href = "review.html?id=" + paper.id;
+    function onTestChange() {
+      const id = $("test-select").value;
+      const locked = Boolean(id);
+      ["paper-select", "subject-filter", "chapter-filter", "topic-filter", "q-count", "q-time"].forEach((key) => {
+        $(key).disabled = locked;
+      });
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    function stopTimer() {
+      if (tick) clearInterval(tick);
+      tick = null;
+    }
+
+    function startTimer(minutes) {
+      stopTimer();
+      timeLimit = Number(minutes) || 0;
+      if (!timeLimit) {
+        $("timer").textContent = "No time limit";
+        return;
+      }
+      remaining = timeLimit * 60;
+      $("timer").textContent = formatTime(remaining);
+      tick = setInterval(() => {
+        remaining -= 1;
+        $("timer").textContent = formatTime(Math.max(0, remaining));
+        if (remaining <= 0) {
+          stopTimer();
+          SE.toast("Time is up");
+          finish();
+        }
+      }, 1000);
     }
 
     function renderCard() {
@@ -523,6 +525,7 @@ window.SE = {
         <div class="card-head"><h3>Question ${SE.esc(q.number || String(index + 1))}</h3></div>
         <div class="tags">
           <span class="tag blue">${SE.esc(q.subject || "General")}</span>
+          <span class="tag">${SE.esc(q.chapter || "")}</span>
           <span class="tag">${SE.esc(q.topic || "")}</span>
         </div>
         <div class="stem">${SE.esc(q.question)}</div>
@@ -546,27 +549,37 @@ window.SE = {
       $("page-label").textContent = items.length ? `${index + 1} / ${items.length}` : "0 / 0";
     }
 
-    function start() {
-      if (!paper || !(paper.mcqs || []).length) {
-        SE.toast("Upload a paper first");
-        return;
+    async function start() {
+      try {
+        const payload = await SE.postJson("/api/practice/start", {
+          test_id: $("test-select").value ? Number($("test-select").value) : null,
+          paper_id: $("paper-select").value ? Number($("paper-select").value) : null,
+          subject: $("subject-filter").value,
+          chapter: $("chapter-filter").value,
+          topic: $("topic-filter").value,
+          count: Number($("q-count").value || 10),
+          time_limit_minutes: Number($("q-time").value || 0),
+        });
+        items = payload.questions || [];
+        index = 0;
+        picks = {};
+        started = true;
+        $("setup").hidden = true;
+        $("results").hidden = true;
+        $("quiz").hidden = false;
+        $("review-link").href = payload.questions?.[0]?.paper_id
+          ? "review.html?id=" + payload.questions[0].paper_id
+          : "review.html";
+        startTimer(payload.time_limit_minutes);
+        renderChrome();
+        renderCard();
+      } catch (ex) {
+        SE.toast(String(ex.message || ex));
       }
-      items = currentItems();
-      if (!items.length) {
-        SE.toast("No questions in that subject");
-        return;
-      }
-      index = 0;
-      picks = {};
-      started = true;
-      $("setup").hidden = true;
-      $("results").hidden = true;
-      $("quiz").hidden = false;
-      renderChrome();
-      renderCard();
     }
 
     function finish() {
+      stopTimer();
       let correct = 0;
       items.forEach((q, i) => {
         if ((picks[i] || "").toUpperCase() === (q.answer || "").toUpperCase()) correct += 1;
@@ -578,10 +591,13 @@ window.SE = {
       $("score-detail").textContent = `${correct} of ${items.length} correct. Unanswered questions count as incorrect.`;
     }
 
-    $("paper-select").onchange = () => loadPaper($("paper-select").value);
+    $("subject-filter").onchange = fillChapters;
+    $("chapter-filter").onchange = fillTopics;
+    $("test-select").onchange = onTestChange;
     $("start-btn").onclick = start;
     $("finish-btn").onclick = finish;
     $("retry-btn").onclick = () => {
+      stopTimer();
       $("results").hidden = true;
       $("setup").hidden = false;
     };
@@ -592,9 +608,8 @@ window.SE = {
       if (ev.key === "ArrowLeft") $("prev").click();
       if (ev.key === "ArrowRight") $("next").click();
     });
-    window.addEventListener("load", () => { if (started) renderCard(); });
 
-    loadList().catch((err) => SE.toast(String(err)));
+    SE.requireAuth().then((user) => { if (user) loadSetup().catch((err) => SE.toast(String(err))); });
   </script>
 </body>
 </html>

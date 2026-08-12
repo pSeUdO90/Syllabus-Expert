@@ -321,7 +321,28 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); }
 }
 .score-box .big { font-size: 48px; font-weight: 800; letter-spacing: -0.04em; }
 
+.account {
+  display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px;
+}
+.login-wrap { min-height: calc(100vh - 70px); display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(420px, 100%); padding: 28px; }
+.login-card h1 { font-size: 28px; }
+.timer {
+  font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: 0.04em;
+  color: var(--amber);
+}
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
+.tabs button.active { background: var(--panel-2); border-color: var(--blue); }
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tree { display: grid; gap: 10px; }
+.tree-item { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+.inline-form input, .inline-form select { min-width: 140px; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.table th { color: var(--muted); font-size: 12px; font-weight: 650; }
+
 @media (max-width: 900px) {
-  .hero, .features { grid-template-columns: 1fr; }
+  .hero, .features, .admin-grid { grid-template-columns: 1fr; }
   .paper-row { grid-template-columns: 1fr; }
 }

@@ -66,6 +66,9 @@ def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(SCHEMA)
+        from syllabus_expert.org import ensure_org
+
+        ensure_org(conn)
         try:
             yield conn
             conn.commit()
@@ -130,6 +133,9 @@ def save_paper(db_path: Path, paper: ExtractedPaper) -> int:
             )
             paper_id = int(cur.lastrowid)
         _insert_questions(conn, paper_id, paper.mcqs)
+        from syllabus_expert.org import sync_taxonomy_from_questions
+
+        sync_taxonomy_from_questions(conn)
     paper.id = paper_id
     return paper_id
 
@@ -210,8 +216,8 @@ def _insert_questions(conn: sqlite3.Connection, paper_id: int, mcqs: list[MCQ]) 
             """
             INSERT INTO questions (
                 paper_id, number, question, answer, explanation, page, source,
-                subject, topic, difficulty, sort_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                subject, chapter, topic, difficulty, sort_order
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 paper_id,
@@ -222,6 +228,7 @@ def _insert_questions(conn: sqlite3.Connection, paper_id: int, mcqs: list[MCQ]) 
                 mcq.page,
                 mcq.source,
                 mcq.subject,
+                mcq.chapter,
                 mcq.topic,
                 mcq.difficulty,
                 order,
@@ -258,6 +265,7 @@ def _paper_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> ExtractedPape
                 page=question["page"],
                 source=question["source"] or "heuristic",
                 subject=question["subject"],
+                chapter=question["chapter"] if "chapter" in question.keys() else None,
                 topic=question["topic"],
                 difficulty=question["difficulty"],
             )
