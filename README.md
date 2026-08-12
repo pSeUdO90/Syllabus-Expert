@@ -98,17 +98,29 @@ Debug the parser on plain text:
 syllabus-expert from-text extracted.txt -o questions.json
 ```
 
-Review the extracted bank in a local dark-mode UI (edit, delete, filter by subject, show solutions). Papers are stored in SQLite. Upload a question PDF and optional answer-key PDF to run extract → map → save:
+Run the local website (home, library, upload, review, and practice quiz). Papers are stored in SQLite. Upload a question PDF and optional answer-key PDF to run extract → map → save:
 
 ```bash
 syllabus-expert review
+# same as:
+syllabus-expert serve
 # or import an existing JSON bank first:
 syllabus-expert review questions.json
 ```
 
-Then open http://127.0.0.1:8765 and use **Upload PDFs**. The database defaults to `data/syllabus_expert.db`.
+Then open http://127.0.0.1:8765.
 
-Math is converted to LaTeX on extract (`½MR²` → `$\frac{1}{2}MR^{2}$`) and rendered with KaTeX in the review UI. Edit mode shows the raw `$...$` source.
+| Page | What it does |
+| --- | --- |
+| `/` | Dashboard with library stats |
+| `/upload` | Question PDF + optional answer-key PDF |
+| `/library` | List, open, or delete saved papers |
+| `/review` | Edit stems, mark answers, show LaTeX solutions |
+| `/practice` | Quiz mode with a score at the end |
+
+The database defaults to `data/syllabus_expert.db`.
+
+Math is converted to LaTeX on extract (`½MR²` → `$\frac{1}{2}MR^{2}$`) and rendered with KaTeX. Edit mode in Review shows the raw `$...$` source.
 
 ## Output shape
 

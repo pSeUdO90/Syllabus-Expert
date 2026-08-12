@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from syllabus_expert.db import get_paper, list_papers, save_paper
+from syllabus_expert.db import delete_paper, get_paper, list_papers, paper_stats, save_paper
 from syllabus_expert.models import ExtractedPaper, MCQ, Option
 from syllabus_expert.review.enrich import enrich_mcq
 
@@ -42,3 +42,10 @@ def test_save_and_load_paper(tmp_path: Path):
     assert again is not None
     assert again.mcqs[0].answer == "A"
     assert len(list_papers(db)) == 1
+    stats = paper_stats(db)
+    assert stats["paper_count"] == 1
+    assert stats["question_count"] == 1
+    assert stats["answered_count"] == 1
+    assert delete_paper(db, paper_id) is True
+    assert get_paper(db, paper_id) is None
+    assert paper_stats(db)["paper_count"] == 0

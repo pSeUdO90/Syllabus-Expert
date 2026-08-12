@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Review Assessment</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/library">Library</a>
+      <a href="/upload">Upload</a>
+      <a href="/review">Review</a>
+      <a href="/practice">Practice</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Review Assessment</h1>
+        <div class="title-row">
+          <h2 id="paper-title">Loading…</h2>
+          <button class="icon-btn" id="edit-title" title="Edit title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+          <span class="badge draft" id="status-badge">Draft</span>
+        </div>
+        <div class="meta">
+          <span>Exam: <strong id="exam-name">NEET (UG)</strong></span>
+          <span>Language: <strong id="language">English</strong></span>
+          <span>Difficulty: <strong id="difficulty">medium</strong></span>
+          <span class="ai">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h8l-1 8 11-14h-8l1-6z"/></svg>
+            AI Standard
+          </span>
+        </div>
+        <div class="summary" id="summary">0 / 0 QUESTIONS GENERATED</div>
+      </div>
+      <div class="actions">
+        <a class="ghost" id="practice-link" href="/practice">Practice this paper</a>
+        <button class="ghost" id="add-btn">+ Add Manually</button>
+        <a class="ghost" href="/upload">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+          Upload PDFs
+        </a>
+        <button class="btn primary" id="publish-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+          Publish
+        </button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="left">
+        <label class="field">Paper
+          <select id="paper-select"></select>
+        </label>
+        <label class="field">Filter Subject
+          <select id="subject-filter"></select>
+        </label>
+        <label class="field">Jump to Question
+          <select id="jump"></select>
+        </label>
+      </div>
+      <div class="pager">
+        <button class="icon-btn" id="first" title="First">&laquo;</button>
+        <button class="icon-btn" id="prev" title="Previous">‹</button>
+        <span id="page-label">1 / 1</span>
+        <button class="icon-btn" id="next" title="Next">›</button>
+        <button class="icon-btn" id="last" title="Last">&raquo;</button>
+      </div>
+    </div>
+
+    <section class="card" id="card"></section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal">
+      <h3>Add question</h3>
+      <div class="grid">
+        <input id="new-number" type="text" placeholder="Number (e.g. 181)" />
+        <select id="new-subject">
+          <option>Physics</option><option>Chemistry</option><option>Botany</option><option>Zoology</option>
+        </select>
+        <textarea id="new-stem" placeholder="Question stem"></textarea>
+        <input id="new-a" type="text" placeholder="A" />
+        <input id="new-b" type="text" placeholder="B" />
+        <input id="new-c" type="text" placeholder="C" />
+        <input id="new-d" type="text" placeholder="D" />
+        <select id="new-answer">
+          <option value="A">Correct: A</option>
+          <option value="B">Correct: B</option>
+          <option value="C">Correct: C</option>
+          <option value="D">Correct: D</option>
+        </select>
+        <textarea id="new-expl" placeholder="Solution / explanation"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost" id="modal-cancel">Cancel</button>
+        <button class="btn primary" id="modal-save">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/site.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    let paper = null;
+    let papers = [];
+    let filter = "All Subjects";
+    let index = 0;
+    let editing = false;
+    let solutionOpen = false;
+
+    const filtered = () => {
+      const items = paper.mcqs || [];
+      if (filter === "All Subjects") return items.map((q, i) => ({ q, i }));
+      return items.map((q, i) => ({ q, i })).filter(({ q }) => (q.subject || "General") === filter);
+    };
+
+    function typesetMath(root) {
+      if (editing) return;
+      SE.typesetMath(root);
+    }
+
+    async function load(paperId) {
+      papers = await SE.getJson("/api/papers");
+      const query = paperId ? `?id=${paperId}` : "";
+      paper = await SE.getJson("/api/paper" + query);
+      index = 0;
+      filter = "All Subjects";
+      editing = false;
+      solutionOpen = false;
+      if (paper.id) history.replaceState({}, "", "/review?id=" + paper.id);
+      renderChrome();
+      renderCard();
+    }
+
+    async function save(message) {
+      if (!paper) return;
+      const res = await fetch("/api/paper", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paper),
+      });
+      if (!res.ok) {
+        SE.toast("Save failed");
+        return;
+      }
+      const result = await res.json();
+      paper.id = result.id;
+      papers = await SE.getJson("/api/papers");
+      renderChrome();
+      if (message) SE.toast(message);
+    }
+
+    function renderChrome() {
+      $("paper-title").textContent = paper.title || "Untitled assessment";
+      $("exam-name").textContent = paper.exam || "NEET (UG)";
+      $("language").textContent = paper.language || "English";
+      $("difficulty").textContent = paper.difficulty || "medium";
+      $("status-badge").textContent = (paper.status || "draft").toUpperCase();
+      $("status-badge").className = "badge " + (paper.status === "published" ? "published" : "draft");
+      const total = (paper.mcqs || []).length;
+      const ready = (paper.mcqs || []).filter((q) => q.question && (q.options || []).length >= 2).length;
+      $("summary").textContent = `${ready} / ${total} QUESTIONS GENERATED`;
+      $("practice-link").href = paper.id ? "/practice?id=" + paper.id : "/practice";
+
+      $("paper-select").innerHTML = (papers.length ? papers : [{
+        id: paper.id, title: paper.title || "Untitled assessment", question_count: total
+      }]).map((item) =>
+        `<option value="${item.id ?? ""}" ${String(item.id) === String(paper.id) ? "selected" : ""}>${SE.esc(item.title)} (${item.question_count ?? total})</option>`
+      ).join("") || `<option>No papers yet</option>`;
+
+      const subjects = ["All Subjects", ...new Set((paper.mcqs || []).map((q) => q.subject || "General"))];
+      $("subject-filter").innerHTML = subjects.map((s) =>
+        `<option ${s === filter ? "selected" : ""}>${SE.esc(s)}</option>`
+      ).join("");
+
+      const rows = filtered();
+      if (index >= rows.length) index = Math.max(0, rows.length - 1);
+      $("jump").innerHTML = rows.map((row, i) =>
+        `<option value="${i}" ${i === index ? "selected" : ""}>Question ${SE.esc(row.q.number || String(i + 1))}</option>`
+      ).join("");
+      $("page-label").textContent = rows.length ? `${index + 1} / ${rows.length}` : "0 / 0";
+    }
+
+    function renderCard() {
+      const rows = filtered();
+      const card = $("card");
+      if (!rows.length) {
+        card.innerHTML = `<div class="empty">No questions in this filter. <a href="/upload">Upload PDFs</a> to import a paper.</div>`;
+        return;
+      }
+      const { q } = rows[index];
+      const topic = q.topic || q.subject || "General";
+      const opts = (q.options || []).map((opt) => {
+        const correct = (q.answer || "").toUpperCase() === (opt.letter || "").toUpperCase();
+        return `
+          <div class="opt ${correct ? "correct" : ""}" data-letter="${SE.esc(opt.letter)}">
+            <span class="letter">${SE.esc(opt.letter)}.</span>
+            <div class="opt-text" ${editing ? 'contenteditable="true"' : ""}>${SE.esc(opt.text || "—")}</div>
+            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>`;
+      }).join("");
+      card.innerHTML = `
+        <div class="card-head">
+          <h3>Question ${SE.esc(q.number || "")}</h3>
+          <div class="card-tools">
+            <button class="ghost" id="edit-q">${editing ? "Save" : "Edit"}</button>
+            <button class="icon-btn danger" id="delete-q" title="Delete">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="tags">
+          <span class="tag">MCQ</span>
+          <span class="tag yellow">${SE.esc((q.difficulty || "medium").replace(/^./, (c) => c.toUpperCase()))}</span>
+          <span class="tag">AI</span>
+          <span class="tag blue">${SE.esc(topic)}</span>
+          <button class="ghost" id="reclassify" style="padding:6px 10px;border-radius:999px;font-size:12px;">Reclassify</button>
+        </div>
+        <div class="stem" ${editing ? 'contenteditable="true"' : ""}>${SE.esc(q.question)}</div>
+        ${editing ? '<div class="edit-hint">Use LaTeX in $...$ or $$...$$ (example: $\\frac{1}{2}MR^{2}$)</div>' : ""}
+        <div class="options">${opts}</div>
+        <button class="solution-toggle" id="sol-toggle">
+          <span>SHOW SOLUTION</span>
+          <span>${solutionOpen ? "▴" : "▾"}</span>
+        </button>
+        <div class="solution-body ${solutionOpen ? "open" : ""}" ${editing ? 'contenteditable="true"' : ""} id="sol-body">
+          ${SE.esc(q.explanation || "No solution mapped yet.")}
+        </div>
+      `;
+
+      $("edit-q").onclick = async () => {
+        if (editing) {
+          q.question = card.querySelector(".stem").innerText.trim();
+          q.explanation = $("sol-body").innerText.trim();
+          card.querySelectorAll(".opt").forEach((el) => {
+            const letter = el.dataset.letter;
+            const opt = q.options.find((o) => o.letter === letter);
+            if (opt) opt.text = el.querySelector(".opt-text").innerText.trim();
+          });
+          editing = false;
+          await save("Question saved");
+          renderCard();
+        } else {
+          editing = true;
+          renderCard();
+        }
+      };
+      $("delete-q").onclick = async () => {
+        if (!confirm(`Delete question ${q.number}?`)) return;
+        paper.mcqs.splice(rows[index].i, 1);
+        editing = false;
+        await save("Question deleted");
+        renderChrome();
+        renderCard();
+      };
+      $("reclassify").onclick = async () => {
+        const next = prompt("Subject (Physics, Chemistry, Botany, Zoology):", q.subject || "");
+        if (!next) return;
+        q.subject = next.trim();
+        const topicNext = prompt("Topic tag:", q.topic || "");
+        if (topicNext !== null) q.topic = topicNext.trim();
+        await save("Reclassified");
+        renderChrome();
+        renderCard();
+      };
+      $("sol-toggle").onclick = () => {
+        solutionOpen = !solutionOpen;
+        renderCard();
+      };
+      card.querySelectorAll(".opt").forEach((el) => {
+        el.onclick = async (ev) => {
+          if (editing && ev.target.classList.contains("opt-text")) return;
+          q.answer = el.dataset.letter;
+          await save("Correct option updated");
+          renderCard();
+        };
+      });
+      typesetMath(card);
+    }
+
+    $("subject-filter").onchange = () => {
+      filter = $("subject-filter").value;
+      index = 0;
+      solutionOpen = false;
+      renderChrome();
+      renderCard();
+    };
+    $("jump").onchange = () => {
+      index = Number($("jump").value);
+      solutionOpen = false;
+      renderChrome();
+      renderCard();
+    };
+    const move = (delta) => {
+      const rows = filtered();
+      if (!rows.length) return;
+      index = Math.min(rows.length - 1, Math.max(0, index + delta));
+      solutionOpen = false;
+      renderChrome();
+      renderCard();
+    };
+    $("prev").onclick = () => move(-1);
+    $("next").onclick = () => move(1);
+    $("first").onclick = () => { index = 0; renderChrome(); renderCard(); };
+    $("last").onclick = () => { index = Math.max(0, filtered().length - 1); renderChrome(); renderCard(); };
+    $("edit-title").onclick = async () => {
+      const next = prompt("Assessment title", paper.title || "");
+      if (!next) return;
+      paper.title = next.trim();
+      await save("Title updated");
+      renderChrome();
+    };
+    $("publish-btn").onclick = async () => {
+      paper.status = paper.status === "published" ? "draft" : "published";
+      await save(paper.status === "published" ? "Published" : "Moved back to draft");
+      renderChrome();
+    };
+    $("paper-select").onchange = () => {
+      const id = $("paper-select").value;
+      if (id) load(id);
+    };
+    $("add-btn").onclick = () => { $("modal-bg").style.display = "flex"; };
+    $("modal-cancel").onclick = () => { $("modal-bg").style.display = "none"; };
+    $("modal-save").onclick = async () => {
+      const number = $("new-number").value.trim() || String((paper.mcqs.length || 0) + 1);
+      paper.mcqs.push({
+        number,
+        question: $("new-stem").value.trim(),
+        options: [
+          { letter: "A", text: $("new-a").value.trim() },
+          { letter: "B", text: $("new-b").value.trim() },
+          { letter: "C", text: $("new-c").value.trim() },
+          { letter: "D", text: $("new-d").value.trim() },
+        ],
+        answer: $("new-answer").value,
+        explanation: $("new-expl").value.trim(),
+        page: null,
+        source: "heuristic",
+        subject: $("new-subject").value,
+        topic: $("new-subject").value,
+        difficulty: paper.difficulty || "medium",
+      });
+      $("modal-bg").style.display = "none";
+      filter = "All Subjects";
+      index = paper.mcqs.length - 1;
+      await save("Question added");
+      renderChrome();
+      renderCard();
+    };
+    document.addEventListener("keydown", (ev) => {
+      if (["INPUT", "TEXTAREA"].includes(ev.target.tagName) || ev.target.isContentEditable) return;
+      if (ev.key === "ArrowLeft") move(-1);
+      if (ev.key === "ArrowRight") move(1);
+      if (ev.key.toLowerCase() === "s") { solutionOpen = !solutionOpen; renderCard(); }
+    });
+
+    load(params.get("id")).catch((err) => {
+      $("card").innerHTML = `<div class="empty">Failed to load questions: ${SE.esc(err)}. Use <a href="/upload">Upload PDFs</a> to import a paper.</div>`;
+    });
+    window.addEventListener("load", () => { if (paper) renderCard(); });
+  </script>
+</body>
+</html>

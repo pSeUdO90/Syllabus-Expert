@@ -172,6 +172,38 @@ def list_papers(db_path: Path) -> list[dict[str, object]]:
         ]
 
 
+def delete_paper(db_path: Path, paper_id: int) -> bool:
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT id FROM papers WHERE id=?", (paper_id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute(
+            "DELETE FROM options WHERE question_id IN (SELECT id FROM questions WHERE paper_id=?)",
+            (paper_id,),
+        )
+        conn.execute("DELETE FROM questions WHERE paper_id=?", (paper_id,))
+        conn.execute("DELETE FROM papers WHERE id=?", (paper_id,))
+        return True
+
+
+def paper_stats(db_path: Path) -> dict[str, int]:
+    with connect(db_path) as conn:
+        papers = conn.execute("SELECT COUNT(*) AS n FROM papers").fetchone()
+        questions = conn.execute("SELECT COUNT(*) AS n FROM questions").fetchone()
+        answered = conn.execute(
+            "SELECT COUNT(*) AS n FROM questions WHERE answer IS NOT NULL AND TRIM(answer) != ''"
+        ).fetchone()
+        published = conn.execute(
+            "SELECT COUNT(*) AS n FROM papers WHERE status = 'published'"
+        ).fetchone()
+        return {
+            "paper_count": int(papers["n"]),
+            "question_count": int(questions["n"]),
+            "answered_count": int(answered["n"]),
+            "published_count": int(published["n"]),
+        }
+
+
 def _insert_questions(conn: sqlite3.Connection, paper_id: int, mcqs: list[MCQ]) -> None:
     for order, mcq in enumerate(mcqs):
         cur = conn.execute(

@@ -1,16 +1,39 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from syllabus_expert.db import get_paper, latest_paper_id, list_papers, save_paper
+from syllabus_expert.db import (
+    delete_paper,
+    get_paper,
+    latest_paper_id,
+    list_papers,
+    paper_stats,
+    save_paper,
+)
 from syllabus_expert.ingest import ingest_pdfs, parse_multipart
 from syllabus_expert.models import ExtractedPaper
 
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_UPLOAD_BYTES = 60 * 1024 * 1024
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/javascript", ".js")
+
+PAGES = {
+    "/": "index.html",
+    "/index.html": "index.html",
+    "/library": "library.html",
+    "/library.html": "library.html",
+    "/upload": "upload.html",
+    "/upload.html": "upload.html",
+    "/review": "review.html",
+    "/review.html": "review.html",
+    "/practice": "practice.html",
+    "/practice.html": "practice.html",
+}
 
 
 def empty_paper() -> ExtractedPaper:
@@ -30,13 +53,17 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
 
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-            if parsed.path in {"/", "/index.html"}:
-                self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            path = parsed.path
+            if path in PAGES:
+                self._send_file(STATIC_DIR / PAGES[path], "text/html; charset=utf-8")
                 return
-            if parsed.path == "/api/papers":
+            if path == "/api/stats":
+                self._send_json(paper_stats(db_path))
+                return
+            if path == "/api/papers":
                 self._send_json(list_papers(db_path))
                 return
-            if parsed.path == "/api/paper":
+            if path == "/api/paper":
                 query = parse_qs(parsed.query)
                 raw_id = (query.get("id") or [None])[0]
                 paper_id = int(raw_id) if raw_id else latest_paper_id(db_path)
@@ -48,6 +75,8 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
                     self._send_json({"error": "Paper not found"}, status=404)
                     return
                 self._send_json(paper.model_dump())
+                return
+            if self._try_static(path):
                 return
             self._send_bytes(b"Not found", 404, "text/plain")
 
@@ -62,6 +91,22 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
             paper_id = save_paper(db_path, paper)
             saved = get_paper(db_path, paper_id)
             self._send_json({"ok": True, "id": paper_id, "count": len(saved.mcqs) if saved else 0})
+
+        def do_DELETE(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/paper":
+                self._send_bytes(b"Not found", 404, "text/plain")
+                return
+            query = parse_qs(parsed.query)
+            raw_id = (query.get("id") or [None])[0]
+            if not raw_id:
+                self._send_json({"error": "Paper id is required"}, status=400)
+                return
+            ok = delete_paper(db_path, int(raw_id))
+            if not ok:
+                self._send_json({"error": "Paper not found"}, status=404)
+                return
+            self._send_json({"ok": True, "id": int(raw_id)})
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
@@ -114,6 +159,27 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
                 return
             self._send_json(paper.model_dump())
 
+        def _try_static(self, url_path: str) -> bool:
+            rel = url_path.lstrip("/")
+            if not rel or ".." in rel.split("/"):
+                return False
+            path = (STATIC_DIR / rel).resolve()
+            try:
+                path.relative_to(STATIC_DIR.resolve())
+            except ValueError:
+                return False
+            if not path.is_file():
+                return False
+            guessed, _ = mimetypes.guess_type(path.name)
+            content_type = guessed or "application/octet-stream"
+            if content_type.startswith("text/") or content_type in {
+                "application/javascript",
+                "application/json",
+            }:
+                content_type = f"{content_type}; charset=utf-8"
+            self._send_file(path, content_type)
+            return True
+
         def _send_file(self, path: Path, content_type: str) -> None:
             if not path.exists():
                 self._send_bytes(b"Not found", 404, "text/plain")
@@ -147,8 +213,8 @@ def serve(
     uploads.mkdir(parents=True, exist_ok=True)
     handler = make_handler(db_path, uploads)
     server = ThreadingHTTPServer((host, port), handler)
-    print(f"Review UI: http://{host}:{port}")
-    print(f"Database:  {db_path}")
+    print(f"Syllabus Expert: http://{host}:{port}")
+    print(f"Database:        {db_path}")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()

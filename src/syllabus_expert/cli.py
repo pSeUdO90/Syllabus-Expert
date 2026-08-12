@@ -69,23 +69,13 @@ def from_text(
     _print_summary(paper)
 
 
-@app.command()
-def review(
-    json_file: Optional[Path] = typer.Argument(
-        None, help="Optional questions.json to import into the database."
-    ),
-    db: Path = typer.Option(
-        Path("data/syllabus_expert.db"),
-        "--db",
-        help="SQLite database path.",
-    ),
-    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
-    port: int = typer.Option(8765, "--port", "-p", help="Port for the review UI."),
-    open_browser: bool = typer.Option(
-        True, "--open/--no-open", help="Open the UI in a browser."
-    ),
+def _run_site(
+    json_file: Optional[Path],
+    db: Path,
+    host: str,
+    port: int,
+    open_browser: bool,
 ) -> None:
-    """Open the Review Assessment UI (database-backed)."""
     import webbrowser
 
     from syllabus_expert.db import save_paper
@@ -106,7 +96,7 @@ def review(
         typer.echo(f"Imported {len(paper.mcqs)} question(s) as paper #{paper_id} into {db}")
 
     url = f"http://{host}:{port}"
-    typer.echo(f"Opening review UI at {url}")
+    typer.echo(f"Opening Syllabus Expert at {url}")
     typer.echo(f"Database: {db.resolve()}")
     if open_browser:
         try:
@@ -114,6 +104,46 @@ def review(
         except Exception:
             pass
     serve(db, host=host, port=port)
+
+
+@app.command()
+def review(
+    json_file: Optional[Path] = typer.Argument(
+        None, help="Optional questions.json to import into the database."
+    ),
+    db: Path = typer.Option(
+        Path("data/syllabus_expert.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for the website."),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open", help="Open the site in a browser."
+    ),
+) -> None:
+    """Start the Syllabus Expert website (library, upload, review, practice)."""
+    _run_site(json_file, db, host, port, open_browser)
+
+
+@app.command()
+def serve(
+    json_file: Optional[Path] = typer.Argument(
+        None, help="Optional questions.json to import into the database."
+    ),
+    db: Path = typer.Option(
+        Path("data/syllabus_expert.db"),
+        "--db",
+        help="SQLite database path.",
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for the website."),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open", help="Open the site in a browser."
+    ),
+) -> None:
+    """Alias for review: start the Syllabus Expert website."""
+    _run_site(json_file, db, host, port, open_browser)
 
 
 def _write(paper: ExtractedPaper, output: Path | None) -> None:

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Upload — Syllabus Expert</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/library">Library</a>
+      <a href="/upload">Upload</a>
+      <a href="/review">Review</a>
+      <a href="/practice">Practice</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <h1>Upload PDFs</h1>
+    <p class="lede">Extract MCQs from a question paper and optionally map an answer-key PDF. Results are saved to the database automatically.</p>
+    <section class="card" style="padding:22px">
+      <div class="grid" style="display:grid;gap:12px">
+        <label class="field">Title (optional)
+          <input id="upload-title" type="text" placeholder="Taken from the PDF if blank" />
+        </label>
+        <label class="field">Exam
+          <input id="upload-exam" type="text" placeholder="e.g. NEET (UG)" value="NEET (UG)" />
+        </label>
+        <label class="file-box">
+          <strong>Question paper PDF</strong>
+          <input id="upload-paper" type="file" accept="application/pdf,.pdf" />
+        </label>
+        <label class="file-box">
+          <strong>Answer key PDF (optional)</strong>
+          <input id="upload-answers" type="file" accept="application/pdf,.pdf" />
+        </label>
+        <div class="actions">
+          <button class="btn primary" id="upload-run">Extract &amp; save</button>
+        </div>
+        <p class="hint">Typical NEET papers (Q1. … Q180. with A. B. C. D.) extract without an API key. Messy scans can use the CLI agent mode.</p>
+      </div>
+    </section>
+  </div>
+  <div class="overlay" id="busy">
+    <div class="panel">
+      <div class="spinner"></div>
+      <strong>Extracting questions…</strong>
+      <p class="hint">Reading the PDF, parsing MCQs, and mapping the answer key.</p>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="/js/site.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    $("upload-run").onclick = async () => {
+      if (!$("upload-paper").files.length) {
+        SE.toast("Choose a question paper PDF");
+        return;
+      }
+      const data = new FormData();
+      data.append("paper", $("upload-paper").files[0]);
+      if ($("upload-answers").files.length) data.append("answers", $("upload-answers").files[0]);
+      if ($("upload-title").value.trim()) data.append("title", $("upload-title").value.trim());
+      if ($("upload-exam").value.trim()) data.append("exam", $("upload-exam").value.trim());
+      $("busy").classList.add("open");
+      try {
+        const res = await fetch("/api/ingest", { method: "POST", body: data });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || "Ingest failed");
+        SE.toast(`Saved ${payload.mcqs.length} question(s)`);
+        location.href = "/review?id=" + payload.id;
+      } catch (err) {
+        SE.toast(String(err.message || err));
+      } finally {
+        $("busy").classList.remove("open");
+      }
+    };
+  </script>
+</body>
+</html>

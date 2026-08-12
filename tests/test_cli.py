@@ -42,4 +42,10 @@ def test_cli_from_text(tmp_path, sample_text):
 def test_cli_review_help():
     result = runner.invoke(app, ["review", "--help"])
     assert result.exit_code == 0, result.output
-    assert "Review Assessment" in result.output or "review UI" in result.output
+    assert "website" in result.output.lower() or "review" in result.output.lower()
+
+
+def test_cli_serve_help():
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "website" in result.output.lower()

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Library — Syllabus Expert</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/library">Library</a>
+      <a href="/upload">Upload</a>
+      <a href="/review">Review</a>
+      <a href="/practice">Practice</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Library</h1>
+        <p class="lede">Papers stored in the local database. Open one to review questions or start a practice session.</p>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="/upload">Upload PDFs</a>
+      </div>
+    </div>
+    <div class="paper-list" id="list"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="/js/site.js"></script>
+  <script>
+    async function render() {
+      const papers = await SE.getJson("/api/papers");
+      const list = document.getElementById("list");
+      if (!papers.length) {
+        list.innerHTML = `<div class="card"><div class="empty">No papers yet. <a href="/upload">Upload a question PDF</a> to get started.</div></div>`;
+        return;
+      }
+      list.innerHTML = papers.map((p) => `
+        <article class="paper-row">
+          <div>
+            <h3>${SE.esc(p.title || "Untitled assessment")}</h3>
+            <div class="meta" style="margin:0">
+              <span class="badge ${p.status === "published" ? "published" : "draft"}">${SE.esc(p.status || "draft")}</span>
+              <span>${SE.esc(p.exam || "Exam")}</span>
+              <span>${p.question_count} questions</span>
+              <span>Updated ${SE.esc((p.updated_at || "").replace("T", " ").slice(0, 16))}</span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <a class="ghost" href="/review?id=${p.id}">Review</a>
+            <a class="ghost" href="/practice?id=${p.id}">Practice</a>
+            <button class="ghost danger" data-del="${p.id}">Delete</button>
+          </div>
+        </article>
+      `).join("");
+      list.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute("data-del");
+          if (!confirm("Delete this paper and all of its questions?")) return;
+          const res = await fetch("/api/paper?id=" + id, { method: "DELETE" });
+          const payload = await res.json();
+          if (!res.ok) {
+            SE.toast(payload.error || "Delete failed");
+            return;
+          }
+          SE.toast("Paper deleted");
+          render();
+        };
+      });
+    }
+    render().catch((err) => {
+      document.getElementById("list").innerHTML = `<div class="empty">${SE.esc(err)}</div>`;
+    });
+  </script>
+</body>
+</html>

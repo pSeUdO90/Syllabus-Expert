@@ -60,9 +60,42 @@ def test_review_server_roundtrip(tmp_path: Path):
         home = conn.getresponse()
         assert home.status == 200
         html = home.read()
-        assert b"Review Assessment" in html
+        assert b"Syllabus Expert" in html
         assert b"Upload PDFs" in html
-        assert b"katex" in html
+        assert b"/library" in html
+        assert b"/practice" in html
+
+        conn.request("GET", "/review")
+        review = conn.getresponse()
+        assert review.status == 200
+        review_html = review.read()
+        assert b"Review Assessment" in review_html
+        assert b"katex" in review_html
+
+        conn.request("GET", "/library")
+        library = conn.getresponse()
+        assert library.status == 200
+        assert b"Library" in library.read()
+
+        conn.request("GET", "/upload")
+        upload = conn.getresponse()
+        assert upload.status == 200
+        assert b"Question paper PDF" in upload.read()
+
+        conn.request("GET", "/practice")
+        practice = conn.getresponse()
+        assert practice.status == 200
+        assert b"Start practice" in practice.read()
+
+        conn.request("GET", "/css/site.css")
+        css = conn.getresponse()
+        assert css.status == 200
+        assert b"--bg" in css.read()
+
+        conn.request("GET", "/api/stats")
+        stats = json.loads(conn.getresponse().read())
+        assert stats["paper_count"] == 1
+        assert stats["question_count"] == 1
 
         conn.request("GET", "/api/paper")
         payload = json.loads(conn.getresponse().read())
@@ -82,6 +115,13 @@ def test_review_server_roundtrip(tmp_path: Path):
         saved = get_paper(db, payload["id"])
         assert saved is not None
         assert saved.mcqs[0].answer == "A"
+
+        conn.request("DELETE", f"/api/paper?id={payload['id']}")
+        deleted = json.loads(conn.getresponse().read())
+        assert deleted["ok"] is True
+        conn.request("GET", "/api/stats")
+        empty_stats = json.loads(conn.getresponse().read())
+        assert empty_stats["paper_count"] == 0
     finally:
         server.shutdown()
         server.server_close()

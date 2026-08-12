@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Practice — Syllabus Expert</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <header class="site-nav">
+    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/library">Library</a>
+      <a href="/upload">Upload</a>
+      <a href="/review">Review</a>
+      <a href="/practice">Practice</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <h1>Practice</h1>
+    <p class="lede">Attempt a saved paper. Options stay hidden until you pick one. Score is shown at the end.</p>
+
+    <section class="card" id="setup" style="padding:22px">
+      <div class="filters" style="margin:0">
+        <div class="left">
+          <label class="field">Paper
+            <select id="paper-select"></select>
+          </label>
+          <label class="field">Subject
+            <select id="subject-filter"></select>
+          </label>
+        </div>
+        <button class="btn primary" id="start-btn">Start practice</button>
+      </div>
+    </section>
+
+    <section id="quiz" hidden>
+      <div class="filters">
+        <div class="summary" id="progress">0 / 0</div>
+        <div class="pager">
+          <button class="icon-btn" id="prev" title="Previous">‹</button>
+          <span id="page-label">1 / 1</span>
+          <button class="icon-btn" id="next" title="Next">›</button>
+        </div>
+      </div>
+      <section class="card" id="card"></section>
+      <div class="actions" style="margin-top:14px">
+        <button class="ghost" id="finish-btn">Finish &amp; score</button>
+      </div>
+    </section>
+
+    <section class="score-box" id="results" hidden>
+      <div class="big" id="score">0%</div>
+      <p id="score-detail" class="lede" style="margin:8px auto"></p>
+      <div class="actions" style="justify-content:center;margin-top:16px">
+        <button class="btn primary" id="retry-btn">Practice again</button>
+        <a class="ghost" id="review-link" href="/review">Review paper</a>
+      </div>
+    </section>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="/js/site.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    let papers = [];
+    let paper = null;
+    let items = [];
+    let index = 0;
+    let picks = {};
+    let started = false;
+
+    function currentItems() {
+      const filter = $("subject-filter").value;
+      const all = paper.mcqs || [];
+      if (!filter || filter === "All Subjects") return all;
+      return all.filter((q) => (q.subject || "General") === filter);
+    }
+
+    async function loadList() {
+      papers = await SE.getJson("/api/papers");
+      const wanted = params.get("id");
+      $("paper-select").innerHTML = papers.map((p) =>
+        `<option value="${p.id}" ${String(p.id) === String(wanted) ? "selected" : ""}>${SE.esc(p.title)} (${p.question_count})</option>`
+      ).join("") || `<option value="">No papers yet</option>`;
+      if (!papers.length) return;
+      await loadPaper($("paper-select").value);
+    }
+
+    async function loadPaper(id) {
+      paper = await SE.getJson("/api/paper?id=" + id);
+      const subjects = ["All Subjects", ...new Set((paper.mcqs || []).map((q) => q.subject || "General"))];
+      $("subject-filter").innerHTML = subjects.map((s) => `<option>${SE.esc(s)}</option>`).join("");
+      $("review-link").href = "/review?id=" + paper.id;
+    }
+
+    function renderCard() {
+      const q = items[index];
+      const card = $("card");
+      if (!q) {
+        card.innerHTML = `<div class="empty">No questions in this filter.</div>`;
+        return;
+      }
+      const pick = picks[index];
+      const locked = pick !== undefined;
+      const opts = (q.options || []).map((opt) => {
+        const letter = (opt.letter || "").toUpperCase();
+        const correct = (q.answer || "").toUpperCase() === letter;
+        let cls = "opt";
+        if (locked && letter === pick) cls += correct ? " correct" : " wrong";
+        if (locked && correct) cls += " correct";
+        return `
+          <div class="${cls}" data-letter="${SE.esc(letter)}">
+            <span class="letter">${SE.esc(letter)}.</span>
+            <div class="opt-text">${SE.esc(opt.text || "—")}</div>
+            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>`;
+      }).join("");
+      card.innerHTML = `
+        <div class="card-head"><h3>Question ${SE.esc(q.number || String(index + 1))}</h3></div>
+        <div class="tags">
+          <span class="tag blue">${SE.esc(q.subject || "General")}</span>
+          <span class="tag">${SE.esc(q.topic || "")}</span>
+        </div>
+        <div class="stem">${SE.esc(q.question)}</div>
+        <div class="options">${opts}</div>
+        ${locked && q.explanation ? `<div class="solution-body open">${SE.esc(q.explanation)}</div>` : ""}
+      `;
+      card.querySelectorAll(".opt").forEach((el) => {
+        el.onclick = () => {
+          if (picks[index] !== undefined) return;
+          picks[index] = el.dataset.letter;
+          renderChrome();
+          renderCard();
+        };
+      });
+      SE.typesetMath(card);
+    }
+
+    function renderChrome() {
+      const answered = Object.keys(picks).length;
+      $("progress").textContent = `${answered} / ${items.length} ANSWERED`;
+      $("page-label").textContent = items.length ? `${index + 1} / ${items.length}` : "0 / 0";
+    }
+
+    function start() {
+      if (!paper || !(paper.mcqs || []).length) {
+        SE.toast("Upload a paper first");
+        return;
+      }
+      items = currentItems();
+      if (!items.length) {
+        SE.toast("No questions in that subject");
+        return;
+      }
+      index = 0;
+      picks = {};
+      started = true;
+      $("setup").hidden = true;
+      $("results").hidden = true;
+      $("quiz").hidden = false;
+      renderChrome();
+      renderCard();
+    }
+
+    function finish() {
+      let correct = 0;
+      items.forEach((q, i) => {
+        if ((picks[i] || "").toUpperCase() === (q.answer || "").toUpperCase()) correct += 1;
+      });
+      const pct = items.length ? Math.round((correct / items.length) * 100) : 0;
+      $("quiz").hidden = true;
+      $("results").hidden = false;
+      $("score").textContent = pct + "%";
+      $("score-detail").textContent = `${correct} of ${items.length} correct. Unanswered questions count as incorrect.`;
+    }
+
+    $("paper-select").onchange = () => loadPaper($("paper-select").value);
+    $("start-btn").onclick = start;
+    $("finish-btn").onclick = finish;
+    $("retry-btn").onclick = () => {
+      $("results").hidden = true;
+      $("setup").hidden = false;
+    };
+    $("prev").onclick = () => { index = Math.max(0, index - 1); renderChrome(); renderCard(); };
+    $("next").onclick = () => { index = Math.min(items.length - 1, index + 1); renderChrome(); renderCard(); };
+    document.addEventListener("keydown", (ev) => {
+      if (!started || $("quiz").hidden) return;
+      if (ev.key === "ArrowLeft") $("prev").click();
+      if (ev.key === "ArrowRight") $("next").click();
+    });
+    window.addEventListener("load", () => { if (started) renderCard(); });
+
+    loadList().catch((err) => SE.toast(String(err)));
+  </script>
+</body>
+</html>
