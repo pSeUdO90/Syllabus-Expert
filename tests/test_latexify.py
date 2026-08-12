@@ -34,7 +34,36 @@ def test_ascii_sqrt_function():
     assert latexify_text("The SI unit of force is") == "The SI unit of force is"
 
 
-def test_scientific_notation():
+def test_scientific_notation_is_wrapped():
+    result = latexify_text("2.304 × 10-26 N")
+    assert result.startswith("$")
+    assert r"\times" in result
+    assert r"10^{-26}" in result
+    assert "N" in result
+
+
+def test_option_powers_and_sqrt():
+    assert r"a^{2}" in (latexify_text("5kq/a2") or "")
+    assert r"a^{2}" in (latexify_text("kq/a2") or "")
+    result = latexify_text("(√5)kq/a2")
+    assert r"\sqrt{5}" in result
+    assert r"a^{2}" in result
+
+
+def test_sqrt_not_split_across_dollars():
+    result = latexify_text(r"$2\pi \sqrt{4\pi\varepsilon0ma3$ / Qq}")
+    assert result.count("$") % 2 == 0
+    assert r"\sqrt{" in result
+    inner = result.split("$")[1]
+    assert inner.count("{") == inner.count("}")
+    assert r"\varepsilon_0" in result
+    assert r"a^{3}" in result or "ma^{3}" in result
+
+
+def test_coulomb_constant():
+    result = latexify_text("where k = 1/4πε0):")
+    assert r"\frac{1}{4\pi\varepsilon_0}" in result
+    assert r"\varepsilon_0" in result
     result = latexify_text("1.6 × 10-19 C")
     assert r"\times" in result
     assert r"10^{-19}" in result

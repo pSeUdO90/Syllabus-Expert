@@ -62,7 +62,6 @@ UNICODE_TO_LATEX = {
 
 SUPERSCRIPTS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
 SUBSCRIPTS = str.maketrans("₀₁₂₃₄₅₆₇₈₉₊₋", "0123456789+-")
-
 IDENTIFIERS = (
     ("kdisc", r"k_{\mathrm{disc}}"),
     ("kring", r"k_{\mathrm{ring}}"),
@@ -75,13 +74,10 @@ IDENTIFIERS = (
     ("I1", r"I_{1}"),
     ("I2", r"I_{2}"),
 )
-
-SQRT_GROUP = re.compile(r"\\sqrt\s*(?:\[([^\]]*)\]|\(([^)]*)\)|\{([^{}]*)\}|([A-Za-z0-9]+(?:/[A-Za-z0-9]+)?))")
+INFIX_OPS = {"=", ":", "+", "-", "/", r"\times", r"\cdot", r"\pm"}
+UNITS = {"N", "C", "J", "V", "W", "Pa", "m", "s", "g", "A", "K", "kg", "eV"}
 SUPER_RUN = re.compile(r"([⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)")
 SUB_RUN = re.compile(r"([₀₁₂₃₄₅₆₇₈₉₊₋]+)")
-MATH_ATOM = re.compile(
-    r"\\[a-zA-Z]+(?:\s*\{[^{}]*\})*|[A-Za-z][A-Za-z0-9]*(?:_\{[^{}]+\})?(?:\^\{[^{}]+\})?|\^\{[^{}]+\}|_\{[^{}]+\}"
-)
 
 
 def latexify_text(text: str | None) -> str | None:
@@ -90,10 +86,12 @@ def latexify_text(text: str | None) -> str | None:
         return None
     if not text.strip():
         return text
+    if _has_unbalanced_math(text):
+        text = text.replace("$", "")
     pieces: list[str] = []
     for kind, chunk in _split_math_segments(text):
         if kind == "math":
-            pieces.append(f"${chunk}$")
+            pieces.append(f"${_replace_unicode_math(chunk)}$")
         else:
             pieces.append(_convert_and_wrap(chunk))
     return "".join(pieces)
@@ -108,8 +106,14 @@ def latexify_mcq(mcq: MCQ) -> MCQ:
     return mcq
 
 
+def _has_unbalanced_math(text: str) -> bool:
+    for kind, chunk in _split_math_segments(text):
+        if kind == "math" and chunk.count("{") != chunk.count("}"):
+            return True
+    return False
+
+
 def _split_math_segments(text: str) -> list[tuple[str, str]]:
-    """Split on $...$ / $$...$$ so existing LaTeX is left alone."""
     parts: list[tuple[str, str]] = []
     i = 0
     while i < len(text):
@@ -138,8 +142,7 @@ def _split_math_segments(text: str) -> list[tuple[str, str]]:
 
 
 def _convert_and_wrap(text: str) -> str:
-    converted = _replace_unicode_math(text)
-    return _wrap_math(converted)
+    return _wrap_math(_replace_unicode_math(text))
 
 
 def _replace_unicode_math(text: str) -> str:
@@ -157,29 +160,123 @@ def _replace_unicode_math(text: str) -> str:
         if src != "√":
             text = text.replace(src, dst)
     text = text.replace("√", r"\sqrt")
-    text = SQRT_GROUP.sub(_normalize_sqrt, text)
+    text = _normalize_sqrts(text)
     text = re.sub(r"(?<![\\A-Za-z])sqrt\s*\(([^)]*)\)", r"\\sqrt{\1}", text)
-    text = re.sub(r"(\\times\s*)10[-−](\d+)", r"\1 10^{-\2}", text)
-    text = re.sub(r"(?<![.\d])10[-−](\d+)\b", r"10^{-\1}", text)
+    text = re.sub(r"\\varepsilon0(?![0-9])", r"\\varepsilon_0", text)
+    text = re.sub(r"\\epsilon0(?![0-9])", r"\\varepsilon_0", text)
+    text = re.sub(r"(\\varepsilon_0)([A-Za-z])", r"\1 \2", text)
+    text = re.sub(r"(\\times\s*)10[-−](\d+)", r"\g<1>10^{-\2}", text)
+    text = re.sub(r"(?<![.\d\\])10[-−](\d+)\b", r"10^{-\1}", text)
+    text = re.sub(
+        r"1\s*/\s*4\s*\\pi\s*\\varepsilon(?:_0|0)",
+        r"\\frac{1}{4\\pi\\varepsilon_0}",
+        text,
+    )
+    if _looks_like_formula(text):
+        text = re.sub(r"(?<![0-9\\_])([A-Za-z])(\d)(?![0-9])", r"\1^{\2}", text)
     return text
 
 
-def _normalize_sqrt(match: re.Match[str]) -> str:
-    inner = next((group for group in match.groups() if group), "")
-    return rf"\sqrt{{{inner}}}"
+def _entirely_formula(text: str) -> bool:
+    if re.search(
+        r"\b(?:the|and|for|with|from|that|this|when|which|where|since|because|ratio|unit|force|mass)\b",
+        text,
+        flags=re.I,
+    ):
+        return False
+    return _looks_like_formula(text) and len(text) < 120
+
+
+def _looks_like_formula(text: str) -> bool:
+    if "\\" in text or "/" in text or "√" in text:
+        return True
+    compact = text.replace(" ", "")
+    return bool(re.fullmatch(r"[\d().A-Za-z/^+_{}\\-]+", compact) and re.search(r"[A-Za-z]\d", compact))
+
+
+def _normalize_sqrts(text: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        if text.startswith(r"\sqrt", i):
+            j = i + 5
+            while j < len(text) and text[j].isspace():
+                j += 1
+            if j < len(text) and text[j] == "{":
+                close = _matching(text, j, "{", "}")
+                inner = text[j + 1 : close]
+                out.append(r"\sqrt{" + inner + "}")
+                i = close + 1
+                continue
+            if j < len(text) and text[j] == "(":
+                close = _matching(text, j, "(", ")")
+                inner = text[j + 1 : close]
+                out.append(r"\sqrt{" + inner + "}")
+                i = close + 1
+                continue
+            if j < len(text) and text[j] == "[":
+                close = _matching(text, j, "[", "]")
+                inner = text[j + 1 : close]
+                out.append(r"\sqrt{" + inner + "}")
+                i = close + 1
+                continue
+            k = j
+            while k < len(text) and (text[k].isalnum() or text[k] in r"\/^_{}"):
+                k += 1
+            out.append(r"\sqrt{" + text[j:k] + "}")
+            i = k
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def _matching(text: str, open_idx: int, opener: str, closer: str) -> int:
+    depth = 0
+    for k in range(open_idx, len(text)):
+        if text[k] == opener:
+            depth += 1
+        elif text[k] == closer:
+            depth -= 1
+            if depth == 0:
+                return k
+    return len(text) - 1
+
+
+def _tokenize(text: str) -> list[str]:
+    """Split on whitespace but keep \\command{...} groups intact."""
+    tokens: list[str] = []
+    i = 0
+    while i < len(text):
+        if text[i].isspace():
+            j = i
+            while j < len(text) and text[j].isspace():
+                j += 1
+            tokens.append(text[i:j])
+            i = j
+            continue
+        if text[i] == "\\":
+            j = i + 1
+            while j < len(text) and text[j].isalpha():
+                j += 1
+            while j < len(text) and text[j] == "{":
+                j = _matching(text, j, "{", "}") + 1
+            tokens.append(text[i:j])
+            i = j
+            continue
+        j = i + 1
+        while j < len(text) and not text[j].isspace() and text[j] != "\\":
+            j += 1
+        tokens.append(text[i:j])
+        i = j
+    return tokens
 
 
 def _is_math_atom(token: str) -> bool:
     stripped = token.strip()
-    if not stripped:
+    if not stripped or stripped in INFIX_OPS:
         return False
-    if stripped in {"=", ":", "+", "-", "/", r"\times", r"\cdot", r"\pm"}:
-        return False
-    if "\\" in stripped or "^{" in stripped or "_{" in stripped:
-        return True
-    return bool(MATH_ATOM.fullmatch(stripped)) and (
-        "^{" in stripped or "_{" in stripped or stripped.startswith("\\")
-    )
+    return "\\" in stripped or "^{" in stripped or "_{" in stripped
 
 
 def _is_number(token: str) -> bool:
@@ -187,7 +284,19 @@ def _is_number(token: str) -> bool:
 
 
 def _is_short_id(token: str) -> bool:
-    return bool(re.fullmatch(r"[A-Za-z]{1,2}", token.strip()))
+    stripped = token.strip()
+    return bool(re.fullmatch(r"[A-Za-z]{1,3}", stripped)) and stripped not in {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "are",
+        "was",
+        "not",
+    }
 
 
 def _next_nonspace(tokens: list[str], index: int, step: int) -> int | None:
@@ -200,7 +309,13 @@ def _next_nonspace(tokens: list[str], index: int, step: int) -> int | None:
 
 
 def _wrap_math(text: str) -> str:
-    tokens = re.findall(r"\s+|[^\s]+", text)
+    stripped = text.strip()
+    if stripped and "$" not in text and _entirely_formula(stripped):
+        leading = re.match(r"^\s*", text).group(0)
+        trailing = re.search(r"\s*$", text).group(0)
+        return f"{leading}${stripped}${trailing}"
+
+    tokens = _tokenize(text)
     if not tokens:
         return text
     flags = [_is_math_atom(token) for token in tokens]
@@ -211,16 +326,22 @@ def _wrap_math(text: str) -> str:
             stripped = token.strip()
             prev = _next_nonspace(tokens, i, -1)
             nxt = _next_nonspace(tokens, i, 1)
-            if stripped not in {"=", ":", "+", "-", "/"} or prev is None or nxt is None:
-                continue
-            left = flags[prev] or _is_number(tokens[prev]) or _is_short_id(tokens[prev])
-            right = flags[nxt] or _is_number(tokens[nxt]) or _is_short_id(tokens[nxt])
-            seeded = flags[prev] or flags[nxt] or _is_number(tokens[prev]) or _is_number(tokens[nxt])
-            if left and right and seeded:
-                for idx in (i, prev, nxt):
-                    if not flags[idx]:
-                        flags[idx] = True
-                        changed = True
+            if stripped in INFIX_OPS and prev is not None and nxt is not None:
+                left = flags[prev] or _is_number(tokens[prev]) or _is_short_id(tokens[prev])
+                right = flags[nxt] or _is_number(tokens[nxt]) or _is_short_id(tokens[nxt])
+                seeded = flags[prev] or flags[nxt] or _is_number(tokens[prev]) or _is_number(tokens[nxt])
+                if left and right and seeded:
+                    for idx in (i, prev, nxt):
+                        if not flags[idx]:
+                            flags[idx] = True
+                            changed = True
+            elif stripped in UNITS and prev is not None and flags[prev] and not flags[i]:
+                flags[i] = True
+                changed = True
+            elif _is_number(token) and not flags[i]:
+                if (prev is not None and flags[prev]) or (nxt is not None and flags[nxt]):
+                    flags[i] = True
+                    changed = True
         return changed
 
     for _ in range(len(tokens) + 2):
@@ -255,5 +376,7 @@ def _wrap_math(text: str) -> str:
         if not core:
             out.append(raw)
             continue
+        if core.count("{") > core.count("}"):
+            core += "}" * (core.count("{") - core.count("}"))
         out.append(f"{leading}${core}${punct}{trailing}")
     return "".join(out)
