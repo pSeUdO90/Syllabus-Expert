@@ -82,6 +82,53 @@ def test_question_spans_pages():
     assert mcqs[0].answer == "B"
 
 
+def test_neet_q_prefix_and_letter_on_own_line():
+    text = """
+Q1.
+A uniform disc and a uniform ring have the same mass and radius.
+The ratio of their radii of gyration is:
+A.
+1 : 2
+B.
+√2 : 1
+C.
+1 : √2
+D.
+2 : 1
+Q2.
+Assertion (A): Angular momentum remains constant.
+Reason (R): Net torque about the center is zero.
+A.
+Both (A) and (R) are true and (R) is the correct explanation of (A).
+B.
+Both (A) and (R) are true but (R) is NOT the correct explanation of (A).
+C.
+(A) is true but (R) is false.
+D.
+(A) is false but (R) is true.
+Q3.
+Consider the following statements:
+1. The velocity of the point of contact with the ground is zero.
+2. The ratio of rotational KE to translational KE is 2:5.
+How many of the above statements are correct?
+A.
+Only one
+B.
+Only two
+C.
+Only three
+D.
+All four
+"""
+    mcqs, warnings = parse_mcqs([PageText(page=1, text=text, char_count=len(text))])
+    assert [mcq.number for mcq in mcqs] == ["1", "2", "3"]
+    assert mcqs[0].options[1].text == "√2 : 1"
+    assert mcqs[1].options[2].text == "(A) is true but (R) is false."
+    assert "point of contact" in mcqs[2].question
+    assert mcqs[2].options[0].text == "Only one"
+    assert not any("Skipped incomplete" in w for w in warnings)
+
+
 def test_empty_text_warns():
     mcqs, warnings = parse_mcqs([PageText(page=1, text="Syllabus only.", char_count=14)])
     assert mcqs == []

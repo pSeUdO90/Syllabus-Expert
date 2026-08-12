@@ -5,28 +5,24 @@ import re
 from syllabus_expert.models import MCQ, Option
 from syllabus_expert.pdf import PageText
 
-QUESTION_START = re.compile(
-    r"""
-    ^\s*
-    (?:
-        Q(?:uestion)?\.?\s*(\d+)\s*[.\)\:]?   # Q.1 / Q1. / Question 1
-      | (\d+)\s*[.\)\:]                         # 1. / 1) / 1:
-    )
-    \s+
-    (.*\S.*)
-    $
-    """,
-    re.IGNORECASE | re.VERBOSE,
+# Q1. / Q.1 / Question 12:  — rest of the stem may be on later lines.
+Q_START = re.compile(
+    r"^\s*Q(?:uestion)?\.?\s*(\d+)\s*[.\:)]?\s*(.*)$",
+    re.IGNORECASE,
 )
+# 1. / 1)  — used when the paper is not Q-numbered (and never inside Q-mode).
+NUM_START = re.compile(r"^\s*(\d+)\s*[.\)\:]\s+(.*\S.*)$")
+# A.  / A. text  / (a) text  / A) text
+# Do not treat "(A) is true" as an option; that is assertion-reason wording.
 OPTION_START = re.compile(
-    r"^\s*(?:\(?([A-Da-d])\)|([A-Da-d])[\.\)])\s+(.*\S.*)$",
+    r"^\s*(?:([A-D])\.|\(([A-Da-d])\)|([A-Da-d])\))\s*(.*)$",
 )
 ANSWER_LINE = re.compile(
     r"^\s*(?:Ans(?:wer)?s?|Correct(?:\s+answer)?)\s*[:.\-]\s*\(?([A-Da-d])\)?\s*\.?\s*$",
     re.IGNORECASE,
 )
 ANSWER_KEY_HEADING = re.compile(
-    r"^\s*(?:answer\s*keys?|answers?|key)\s*[:.\-]?\s*$",
+    r"^\s*(?:answer\s*keys?|answers?)\s*[:.\-]?\s*$",
     re.IGNORECASE,
 )
 ANSWER_KEY_ITEM = re.compile(
@@ -34,7 +30,26 @@ ANSWER_KEY_ITEM = re.compile(
 )
 PAGE_MARKER = re.compile(r"^<<<PAGE (\d+)>>>\s*$")
 SKIP_LINE = re.compile(
-    r"^\s*(page\s+\d+|www\.|\d+\s*/\s*\d+)\s*$",
+    r"""
+    ^\s*(
+        page\s+\d+
+      | www\.
+      | \d+\s*/\s*\d+
+      | contact\s*:
+      | section\s+\d+
+      | part\s+[a-d]\b
+      | marking\s+scheme\b
+      | subjects\s*:
+      | full\s+marks\s*:
+      | total\s+questions\s*:
+      | duration\s*:
+      | practice\s+paper\b
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+INLINE_FOOTER = re.compile(
+    r"\s*Page\s+\d+\s+of\s+\d+(?:\s*Contact:\s*\d+)?\s*",
     re.IGNORECASE,
 )
 
@@ -46,7 +61,13 @@ def parse_mcqs(pages: list[PageText]) -> tuple[list[MCQ], list[str]]:
     for page in pages:
         lines.append((page.page, f"<<<PAGE {page.page}>>>"))
         for raw in page.text.splitlines():
-            lines.append((page.page, raw))
+            cleaned = INLINE_FOOTER.sub(" ", raw).strip()
+            if cleaned:
+                lines.append((page.page, cleaned))
+            elif raw.strip():
+                lines.append((page.page, raw.strip()))
+
+    q_mode = any(Q_START.match(line) for _, line in lines)
 
     questions: list[MCQ] = []
     answer_key: dict[str, str] = {}
@@ -72,8 +93,7 @@ def parse_mcqs(pages: list[PageText]) -> tuple[list[MCQ], list[str]]:
         if not stripped:
             continue
 
-        page_match = PAGE_MARKER.match(stripped)
-        if page_match:
+        if PAGE_MARKER.match(stripped):
             continue
 
         if ANSWER_KEY_HEADING.match(stripped):
@@ -89,22 +109,36 @@ def parse_mcqs(pages: list[PageText]) -> tuple[list[MCQ], list[str]]:
         if SKIP_LINE.match(stripped):
             continue
 
-        question_match = QUESTION_START.match(stripped)
-        if question_match:
+        q_match = Q_START.match(stripped)
+        if q_match:
             flush()
             current = _Draft(
-                number=question_match.group(1) or question_match.group(2),
-                question=question_match.group(3).strip(),
+                number=q_match.group(1),
+                question=q_match.group(2).strip(),
                 page=page,
             )
             continue
 
+        if not q_mode:
+            num_match = NUM_START.match(stripped)
+            if num_match:
+                flush()
+                current = _Draft(
+                    number=num_match.group(1),
+                    question=num_match.group(2).strip(),
+                    page=page,
+                )
+                continue
+
         option_match = OPTION_START.match(stripped)
         if option_match and current is not None:
-            letter = (option_match.group(1) or option_match.group(2)).upper()
-            text = option_match.group(3).strip()
-            current.add_option(letter, text)
-            continue
+            letter = (
+                option_match.group(1) or option_match.group(2) or option_match.group(3)
+            ).upper()
+            text = option_match.group(4).strip()
+            if current.accepts_option(letter):
+                current.add_option(letter, text)
+                continue
 
         answer_match = ANSWER_LINE.match(stripped)
         if answer_match and current is not None:
@@ -137,6 +171,12 @@ class _Draft:
         self.page = page
         self.options: list[Option] = []
         self.answer: str | None = None
+
+    def accepts_option(self, letter: str) -> bool:
+        if not self.options:
+            return letter == "A"
+        last = self.options[-1].letter
+        return len(letter) == 1 and ord(letter) == ord(last) + 1
 
     def add_option(self, letter: str, text: str) -> None:
         self.options.append(Option(letter=letter, text=text))
