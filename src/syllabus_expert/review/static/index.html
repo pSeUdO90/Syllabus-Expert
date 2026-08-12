@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Review Assessment</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
   <style>
     :root {
       --bg: #12151c;
@@ -156,6 +159,9 @@
     }
     .solution-body { display: none; padding: 0 22px 20px; color: #d5deea; line-height: 1.6; }
     .solution-body.open { display: block; }
+    .katex { color: inherit; font-size: 1.08em; }
+    .katex-display { margin: 0.4em 0; overflow-x: auto; }
+    .edit-hint { color: var(--muted); font-size: 12px; padding: 0 22px 10px; }
     .toast {
       position: fixed; bottom: 20px; right: 20px; background: var(--panel-2);
       border: 1px solid var(--line); padding: 12px 14px; border-radius: 12px;
@@ -344,6 +350,20 @@
       setTimeout(() => { el.style.display = "none"; }, 2200);
     };
 
+    function typesetMath(root) {
+      if (editing || !window.renderMathInElement || !root) return;
+      window.renderMathInElement(root, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        throwOnError: false,
+        ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+      });
+    }
+
     async function load(paperId) {
       const listRes = await fetch("/api/papers");
       papers = await listRes.json();
@@ -444,6 +464,7 @@
           <button class="ghost" id="reclassify" style="padding:6px 10px;border-radius:999px;font-size:12px;">Reclassify</button>
         </div>
         <div class="stem" ${editing ? 'contenteditable="true"' : ""}>${esc(q.question)}</div>
+        ${editing ? '<div class="edit-hint">Use LaTeX in $...$ or $$...$$ (example: $\\frac{1}{2}MR^{2}$)</div>' : ""}
         <div class="options">${opts}</div>
         <button class="solution-toggle" id="sol-toggle">
           <span>SHOW SOLUTION</span>
@@ -501,6 +522,7 @@
           renderCard();
         };
       });
+      typesetMath(card);
     }
 
     $("subject-filter").onchange = () => {
@@ -614,6 +636,7 @@
     load().catch((err) => {
       $("card").innerHTML = `<div class="empty">Failed to load questions: ${esc(err)}. Use <strong>Upload PDFs</strong> to import a paper.</div>`;
     });
+    window.addEventListener("load", () => { if (paper) renderCard(); });
   </script>
 </body>
 </html>

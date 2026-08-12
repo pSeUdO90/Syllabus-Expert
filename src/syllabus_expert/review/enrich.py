@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from syllabus_expert.latexify import latexify_mcq
 from syllabus_expert.models import MCQ
 
 NEET_SECTIONS = (
@@ -57,4 +58,5 @@ def enrich_mcq(mcq: MCQ) -> MCQ:
         mcq.topic = infer_topic(mcq.question, mcq.subject or "General")
     if not mcq.difficulty:
         mcq.difficulty = "medium"
+    latexify_mcq(mcq)
     return mcq

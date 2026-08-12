@@ -34,7 +34,7 @@ def test_save_and_load_paper(tmp_path: Path):
     assert len(loaded.mcqs) == 1
     assert loaded.mcqs[0].answer == "B"
     assert loaded.mcqs[0].subject == "Physics"
-    assert loaded.mcqs[0].options[1].text == "1 : √2"
+    assert loaded.mcqs[0].options[1].text == r"$1 : \sqrt{2}$"
 
     loaded.mcqs[0].answer = "A"
     save_paper(db, loaded)

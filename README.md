@@ -108,6 +108,8 @@ syllabus-expert review questions.json
 
 Then open http://127.0.0.1:8765 and use **Upload PDFs**. The database defaults to `data/syllabus_expert.db`.
 
+Math is converted to LaTeX on extract (`½MR²` → `$\frac{1}{2}MR^{2}$`) and rendered with KaTeX in the review UI. Edit mode shows the raw `$...$` source.
+
 ## Output shape
 
 ```json

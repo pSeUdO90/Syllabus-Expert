@@ -82,6 +82,10 @@ def extract_mcqs(
         paper.warnings.extend(key_warnings)
         paper.warnings.extend(apply_answer_key(paper.mcqs, mapping))
 
+    from syllabus_expert.review.enrich import enrich_mcq
+
+    for mcq in paper.mcqs:
+        enrich_mcq(mcq)
     return paper
 
 

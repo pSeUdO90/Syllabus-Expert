@@ -62,6 +62,7 @@ def test_review_server_roundtrip(tmp_path: Path):
         html = home.read()
         assert b"Review Assessment" in html
         assert b"Upload PDFs" in html
+        assert b"katex" in html
 
         conn.request("GET", "/api/paper")
         payload = json.loads(conn.getresponse().read())

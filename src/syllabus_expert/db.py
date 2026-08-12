@@ -230,6 +230,7 @@ def _paper_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> ExtractedPape
                 difficulty=question["difficulty"],
             )
         )
+        enrich_mcq(mcqs[-1])
     warnings_raw = row["warnings"] or "[]"
     try:
         warnings = json.loads(warnings_raw)
