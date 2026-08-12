@@ -11,7 +11,26 @@
 })();
 
 window.SE = {
-  me: null,
+  tokenKey: "se_session",
+  token() {
+    try {
+      return localStorage.getItem(this.tokenKey) || "";
+    } catch {
+      return "";
+    }
+  },
+  setToken(value) {
+    try {
+      if (value) localStorage.setItem(this.tokenKey, value);
+      else localStorage.removeItem(this.tokenKey);
+    } catch { /* ignore */ }
+  },
+  authHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    const token = this.token();
+    if (token) headers.Authorization = "Bearer " + token;
+    return headers;
+  },
   root() {
     const parts = location.pathname.split("/").filter(Boolean);
     const last = parts[parts.length - 1] || "";
@@ -66,7 +85,10 @@ window.SE = {
     });
   },
   async getJson(path) {
-    const res = await fetch(this.url(path), { credentials: "same-origin" });
+    const res = await fetch(this.url(path), {
+      credentials: "same-origin",
+      headers: this.authHeaders(),
+    });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || res.statusText);
     return payload;
@@ -75,11 +97,12 @@ window.SE = {
     const res = await fetch(this.url(path), {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
+      headers: this.authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body || {}),
     });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || res.statusText);
+    if (payload && payload.token) this.setToken(payload.token);
     return payload;
   },
   decorateNav() {
@@ -95,7 +118,14 @@ window.SE = {
         `<div class="account"><span id="whoami"></span><button class="ghost" type="button" id="logout-btn">Log out</button></div>`
       );
       header.querySelector("#logout-btn").onclick = async () => {
-        await fetch(SE.url("/api/logout"), { method: "POST", credentials: "same-origin" });
+        try {
+          await fetch(SE.url("/api/logout"), {
+            method: "POST",
+            credentials: "same-origin",
+            headers: SE.authHeaders(),
+          });
+        } catch { /* ignore */ }
+        SE.setToken("");
         location.href = "login.html";
       };
     }

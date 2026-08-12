@@ -104,6 +104,12 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
             return
 
         def _session_token(self) -> str | None:
+            auth = self.headers.get("Authorization", "")
+            if auth.lower().startswith("bearer "):
+                return auth.split(" ", 1)[1].strip() or None
+            header = self.headers.get("X-Session-Token", "").strip()
+            if header:
+                return header
             raw = self.headers.get("Cookie", "")
             cookie = SimpleCookie()
             cookie.load(raw)
@@ -129,16 +135,7 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
             query = parse_qs(parsed.query)
             user = self._user()
 
-            if path in PUBLIC_PAGES:
-                self._send_bytes(render_html(PAGES[path]), 200, "text/html; charset=utf-8")
-                return
             if path in PAGES:
-                if user is None:
-                    self._redirect("/login")
-                    return
-                if path in {"/admin", "/admin.html"} and user["role"] not in STAFF_ROLES:
-                    self._redirect("/")
-                    return
                 self._send_bytes(render_html(PAGES[path]), 200, "text/html; charset=utf-8")
                 return
             if path.startswith("/api/"):
@@ -299,8 +296,10 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
                     self._send_json({"error": "Invalid username or password"}, status=401)
                     return
                 token = create_session(db_path, int(user["id"]))
+                payload = dict(user)
+                payload["token"] = token
                 self._send_json(
-                    user,
+                    payload,
                     headers={"Set-Cookie": f"se_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800"},
                 )
                 return

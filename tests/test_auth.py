@@ -31,6 +31,24 @@ def test_login_and_admin_flow(tmp_path: Path):
         assert me["username"] == "admin"
         assert me["role"] == "admin"
 
+        conn.request(
+            "POST",
+            "/api/login",
+            body=json.dumps({"username": "admin", "password": "admin"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        logged = conn.getresponse()
+        session = json.loads(logged.read())
+        assert logged.status == 200
+        assert session["token"]
+        conn.request(
+            "GET",
+            "/api/me",
+            headers={"Authorization": "Bearer " + session["token"]},
+        )
+        via_header = json.loads(conn.getresponse().read())
+        assert via_header["username"] == "admin"
+
         conn.request("GET", "/admin", headers=auth)
         admin_page = conn.getresponse()
         assert admin_page.status == 200

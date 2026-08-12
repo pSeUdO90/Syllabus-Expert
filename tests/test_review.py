@@ -70,7 +70,7 @@ def test_review_server_roundtrip(tmp_path: Path):
         conn.request("GET", "/")
         guest = conn.getresponse()
         guest.read()
-        assert guest.status == 302
+        assert guest.status == 200
 
         auth = _login(conn)
         conn.request("GET", "/", headers=auth)

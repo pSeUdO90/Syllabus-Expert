@@ -34,10 +34,11 @@
       const err = document.getElementById("login-error");
       err.textContent = "";
       try {
-        await SE.postJson("/api/login", {
+        const user = await SE.postJson("/api/login", {
           username: document.getElementById("username").value,
           password: document.getElementById("password").value,
         });
+        if (user && user.token) SE.setToken(user.token);
         location.href = "index.html";
       } catch (ex) {
         err.textContent = String(ex.message || ex);
