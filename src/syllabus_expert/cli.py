@@ -69,6 +69,32 @@ def from_text(
     _print_summary(paper)
 
 
+@app.command()
+def review(
+    json_file: Path = typer.Argument(
+        ..., exists=True, readable=True, help="questions.json from extract."
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for the review UI."),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open", help="Open the UI in a browser."
+    ),
+) -> None:
+    """Open a local Review Assessment UI for extracted questions."""
+    import webbrowser
+
+    from syllabus_expert.review.server import serve
+
+    url = f"http://{host}:{port}"
+    typer.echo(f"Opening review UI at {url}")
+    if open_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+    serve(json_file, host=host, port=port)
+
+
 def _write(paper: ExtractedPaper, output: Path | None) -> None:
     payload = paper.model_dump()
     if output is None:

@@ -27,6 +27,9 @@ syllabus-expert = "syllabus_expert.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+syllabus_expert = ["review/static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

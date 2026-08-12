@@ -24,11 +24,19 @@ class MCQ(BaseModel):
         default=None, description="1-indexed page where the question starts."
     )
     source: Literal["heuristic", "agent"] = "heuristic"
+    subject: str | None = None
+    topic: str | None = None
+    difficulty: str | None = None
 
 
 class ExtractedPaper(BaseModel):
     source_path: str
     page_count: int
+    title: str | None = None
+    exam: str | None = None
+    language: str = "English"
+    difficulty: str = "medium"
+    status: Literal["draft", "published"] = "draft"
     mcqs: list[MCQ] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

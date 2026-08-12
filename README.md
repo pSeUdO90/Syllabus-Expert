@@ -98,6 +98,14 @@ Debug the parser on plain text:
 syllabus-expert from-text extracted.txt -o questions.json
 ```
 
+Review the extracted bank in a local dark-mode UI (edit, delete, filter by subject, show solutions):
+
+```bash
+syllabus-expert review questions.json
+```
+
+Then open http://127.0.0.1:8765
+
 ## Output shape
 
 ```json
