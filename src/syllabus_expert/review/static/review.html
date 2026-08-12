@@ -7,17 +7,17 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
-  <link rel="stylesheet" href="/css/site.css" />
+  <link rel="stylesheet" href="css/site.css" />
 </head>
 <body>
   <header class="site-nav">
-    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <a class="brand" href="index.html"><span class="brand-mark">SE</span> Syllabus Expert</a>
     <nav>
-      <a href="/">Home</a>
-      <a href="/library">Library</a>
-      <a href="/upload">Upload</a>
-      <a href="/review">Review</a>
-      <a href="/practice">Practice</a>
+      <a href="index.html">Home</a>
+      <a href="library.html">Library</a>
+      <a href="upload.html">Upload</a>
+      <a href="review.html">Review</a>
+      <a href="practice.html">Practice</a>
     </nav>
   </header>
   <div class="wrap">
@@ -43,9 +43,9 @@
         <div class="summary" id="summary">0 / 0 QUESTIONS GENERATED</div>
       </div>
       <div class="actions">
-        <a class="ghost" id="practice-link" href="/practice">Practice this paper</a>
+        <a class="ghost" id="practice-link" href="practice.html">Practice this paper</a>
         <button class="ghost" id="add-btn">+ Add Manually</button>
-        <a class="ghost" href="/upload">
+        <a class="ghost" href="upload.html">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
           Upload PDFs
         </a>
@@ -109,7 +109,7 @@
     </div>
   </div>
 
-  <script src="/js/site.js"></script>
+  <script src="js/site.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
@@ -139,14 +139,14 @@
       filter = "All Subjects";
       editing = false;
       solutionOpen = false;
-      if (paper.id) history.replaceState({}, "", "/review?id=" + paper.id);
+      if (paper.id) history.replaceState({}, "", "review.html?id=" + paper.id);
       renderChrome();
       renderCard();
     }
 
     async function save(message) {
       if (!paper) return;
-      const res = await fetch("/api/paper", {
+      const res = await fetch(SE.url("/api/paper"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(paper),
@@ -172,7 +172,7 @@
       const total = (paper.mcqs || []).length;
       const ready = (paper.mcqs || []).filter((q) => q.question && (q.options || []).length >= 2).length;
       $("summary").textContent = `${ready} / ${total} QUESTIONS GENERATED`;
-      $("practice-link").href = paper.id ? "/practice?id=" + paper.id : "/practice";
+      $("practice-link").href = paper.id ? "practice.html?id=" + paper.id : "practice.html";
 
       $("paper-select").innerHTML = (papers.length ? papers : [{
         id: paper.id, title: paper.title || "Untitled assessment", question_count: total
@@ -197,7 +197,7 @@
       const rows = filtered();
       const card = $("card");
       if (!rows.length) {
-        card.innerHTML = `<div class="empty">No questions in this filter. <a href="/upload">Upload PDFs</a> to import a paper.</div>`;
+        card.innerHTML = `<div class="empty">No questions in this filter. <a href="upload.html">Upload PDFs</a> to import a paper.</div>`;
         return;
       }
       const { q } = rows[index];
@@ -367,7 +367,7 @@
     });
 
     load(params.get("id")).catch((err) => {
-      $("card").innerHTML = `<div class="empty">Failed to load questions: ${SE.esc(err)}. Use <a href="/upload">Upload PDFs</a> to import a paper.</div>`;
+      $("card").innerHTML = `<div class="empty">Failed to load questions: ${SE.esc(err)}. Use <a href="upload.html">Upload PDFs</a> to import a paper.</div>`;
     });
     window.addEventListener("load", () => { if (paper) renderCard(); });
   </script>

@@ -62,8 +62,10 @@ def test_review_server_roundtrip(tmp_path: Path):
         html = home.read()
         assert b"Syllabus Expert" in html
         assert b"Upload PDFs" in html
-        assert b"/library" in html
-        assert b"/practice" in html
+        assert b"library.html" in html
+        assert b"practice.html" in html
+        assert b"--bg" in html
+        assert b"#12151c" in html
 
         conn.request("GET", "/review")
         review = conn.getresponse()
@@ -71,6 +73,7 @@ def test_review_server_roundtrip(tmp_path: Path):
         review_html = review.read()
         assert b"Review Assessment" in review_html
         assert b"katex" in review_html
+        assert b"--bg" in review_html
 
         conn.request("GET", "/library")
         library = conn.getresponse()

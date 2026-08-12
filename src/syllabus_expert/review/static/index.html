@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Syllabus Expert</title>
-  <link rel="stylesheet" href="/css/site.css" />
+  <link rel="stylesheet" href="css/site.css" />
 </head>
 <body>
   <header class="site-nav">
-    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <a class="brand" href="index.html"><span class="brand-mark">SE</span> Syllabus Expert</a>
     <nav>
-      <a href="/">Home</a>
-      <a href="/library">Library</a>
-      <a href="/upload">Upload</a>
-      <a href="/review">Review</a>
-      <a href="/practice">Practice</a>
+      <a href="index.html">Home</a>
+      <a href="library.html">Library</a>
+      <a href="upload.html">Upload</a>
+      <a href="review.html">Review</a>
+      <a href="practice.html">Practice</a>
     </nav>
   </header>
   <div class="wrap">
@@ -23,8 +23,8 @@
         <h1>Turn exam PDFs into a question bank you can review and practice.</h1>
         <p class="lede">Upload a question paper and optional answer key. Syllabus Expert extracts MCQs, maps answers, stores them in a local database, and typesets math with LaTeX.</p>
         <div class="actions" style="margin-top:18px">
-          <a class="btn primary" href="/upload">Upload PDFs</a>
-          <a class="ghost" href="/library">Open library</a>
+          <a class="btn primary" href="upload.html">Upload PDFs</a>
+          <a class="ghost" href="library.html">Open library</a>
         </div>
       </div>
       <div class="hero-stats">
@@ -36,19 +36,19 @@
     </section>
 
     <section class="features">
-      <a class="feature" href="/upload">
+      <a class="feature" href="upload.html">
         <h3>Upload</h3>
         <p>Send a question PDF and an answer-key PDF. Extraction runs locally with the heuristic parser.</p>
       </a>
-      <a class="feature" href="/library">
+      <a class="feature" href="library.html">
         <h3>Library</h3>
         <p>Every paper is saved in SQLite. Open, delete, or jump into review and practice from one list.</p>
       </a>
-      <a class="feature" href="/review">
+      <a class="feature" href="review.html">
         <h3>Review</h3>
         <p>Edit stems, mark the correct option, reclassify subjects, and show solutions with KaTeX math.</p>
       </a>
-      <a class="feature" href="/practice">
+      <a class="feature" href="practice.html">
         <h3>Practice</h3>
         <p>Sit a timed-style quiz against a saved paper. Score yourself and inspect missed questions.</p>
       </a>
@@ -62,7 +62,7 @@
       <div class="step"><div class="n">4</div><div><strong>Review and practice</strong><p class="hint">Math is converted to LaTeX. You can edit the bank, then take the paper as a quiz.</p></div></div>
     </section>
   </div>
-  <script src="/js/site.js"></script>
+  <script src="js/site.js"></script>
   <script>
     SE.getJson("/api/stats").then((stats) => {
       $("stat-papers").textContent = stats.paper_count;

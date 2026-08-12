@@ -35,6 +35,29 @@ PAGES = {
     "/practice.html": "practice.html",
 }
 
+EXT_TYPES = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+}
+
+
+def render_html(name: str) -> bytes:
+    """Serve pages with CSS/JS inlined so styles work behind path-prefix proxies."""
+    html = (STATIC_DIR / name).read_text(encoding="utf-8")
+    css = (STATIC_DIR / "css" / "site.css").read_text(encoding="utf-8")
+    js = (STATIC_DIR / "js" / "site.js").read_text(encoding="utf-8")
+    style = f"<style>\n{css}\n</style>"
+    script = f"<script>\n{js}\n</script>"
+    for href in ('href="css/site.css"', 'href="/css/site.css"'):
+        html = html.replace(f'<link rel="stylesheet" {href} />', style)
+    for src in ('src="js/site.js"', 'src="/js/site.js"'):
+        html = html.replace(f"<script {src}></script>", script)
+    return html.encode("utf-8")
+
 
 def empty_paper() -> ExtractedPaper:
     return ExtractedPaper(
@@ -55,7 +78,7 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
             parsed = urlparse(self.path)
             path = parsed.path
             if path in PAGES:
-                self._send_file(STATIC_DIR / PAGES[path], "text/html; charset=utf-8")
+                self._send_bytes(render_html(PAGES[path]), 200, "text/html; charset=utf-8")
                 return
             if path == "/api/stats":
                 self._send_json(paper_stats(db_path))
@@ -170,13 +193,15 @@ def make_handler(db_path: Path, uploads_dir: Path) -> type[BaseHTTPRequestHandle
                 return False
             if not path.is_file():
                 return False
-            guessed, _ = mimetypes.guess_type(path.name)
-            content_type = guessed or "application/octet-stream"
-            if content_type.startswith("text/") or content_type in {
-                "application/javascript",
-                "application/json",
-            }:
-                content_type = f"{content_type}; charset=utf-8"
+            content_type = EXT_TYPES.get(path.suffix.lower())
+            if content_type is None:
+                guessed, _ = mimetypes.guess_type(path.name)
+                content_type = guessed or "application/octet-stream"
+                if content_type.startswith("text/") or content_type in {
+                    "application/javascript",
+                    "application/json",
+                }:
+                    content_type = f"{content_type}; charset=utf-8"
             self._send_file(path, content_type)
             return True
 

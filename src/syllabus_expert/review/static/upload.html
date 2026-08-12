@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Upload — Syllabus Expert</title>
-  <link rel="stylesheet" href="/css/site.css" />
+  <link rel="stylesheet" href="css/site.css" />
 </head>
 <body>
   <header class="site-nav">
-    <a class="brand" href="/"><span class="brand-mark">SE</span> Syllabus Expert</a>
+    <a class="brand" href="index.html"><span class="brand-mark">SE</span> Syllabus Expert</a>
     <nav>
-      <a href="/">Home</a>
-      <a href="/library">Library</a>
-      <a href="/upload">Upload</a>
-      <a href="/review">Review</a>
-      <a href="/practice">Practice</a>
+      <a href="index.html">Home</a>
+      <a href="library.html">Library</a>
+      <a href="upload.html">Upload</a>
+      <a href="review.html">Review</a>
+      <a href="practice.html">Practice</a>
     </nav>
   </header>
   <div class="wrap">
@@ -51,7 +51,7 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/js/site.js"></script>
+  <script src="js/site.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     $("upload-run").onclick = async () => {
@@ -66,11 +66,11 @@
       if ($("upload-exam").value.trim()) data.append("exam", $("upload-exam").value.trim());
       $("busy").classList.add("open");
       try {
-        const res = await fetch("/api/ingest", { method: "POST", body: data });
+        const res = await fetch(SE.url("/api/ingest"), { method: "POST", body: data });
         const payload = await res.json();
         if (!res.ok) throw new Error(payload.error || "Ingest failed");
         SE.toast(`Saved ${payload.mcqs.length} question(s)`);
-        location.href = "/review?id=" + payload.id;
+        location.href = "review.html?id=" + payload.id;
       } catch (err) {
         SE.toast(String(err.message || err));
       } finally {
