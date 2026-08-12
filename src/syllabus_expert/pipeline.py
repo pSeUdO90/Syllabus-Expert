@@ -10,7 +10,12 @@ from syllabus_expert.pdf import extract_pages
 Mode = Literal["auto", "heuristic", "agent"]
 
 
-def extract_mcqs(pdf_path: str | Path, *, mode: Mode = "auto") -> ExtractedPaper:
+def extract_mcqs(
+    pdf_path: str | Path,
+    *,
+    mode: Mode = "auto",
+    answer_key: str | Path | None = None,
+) -> ExtractedPaper:
     """Extract MCQs from a PDF.
 
     auto: heuristic parser, then the LLM agent if a key is set and results look thin.
@@ -31,44 +36,53 @@ def extract_mcqs(pdf_path: str | Path, *, mode: Mode = "auto") -> ExtractedPaper
 
     if mode == "heuristic":
         mcqs, parse_warnings = parse_mcqs(pages)
-        return ExtractedPaper(
+        paper = ExtractedPaper(
             source_path=str(path),
             page_count=len(pages),
             mcqs=mcqs,
             warnings=warnings + parse_warnings,
         )
-
-    if mode == "agent":
+    elif mode == "agent":
         from syllabus_expert.agent import run_agent
 
         mcqs, agent_warnings = run_agent(path)
-        return ExtractedPaper(
+        paper = ExtractedPaper(
             source_path=str(path),
             page_count=len(pages),
             mcqs=_dedupe(mcqs),
             warnings=warnings + agent_warnings,
         )
+    else:
+        mcqs, parse_warnings = parse_mcqs(pages)
+        warnings.extend(parse_warnings)
+        needs_agent = _should_escalate(mcqs, pages)
+        if needs_agent:
+            try:
+                from syllabus_expert.agent import AgentError, run_agent
 
-    mcqs, parse_warnings = parse_mcqs(pages)
-    warnings.extend(parse_warnings)
-    needs_agent = _should_escalate(mcqs, pages)
-    if needs_agent:
-        try:
-            from syllabus_expert.agent import AgentError, run_agent
+                agent_mcqs, agent_warnings = run_agent(path)
+                warnings.extend(agent_warnings)
+                if agent_mcqs:
+                    mcqs = agent_mcqs
+            except AgentError as exc:
+                warnings.append(str(exc))
 
-            agent_mcqs, agent_warnings = run_agent(path)
-            warnings.extend(agent_warnings)
-            if agent_mcqs:
-                mcqs = agent_mcqs
-        except AgentError as exc:
-            warnings.append(str(exc))
+        paper = ExtractedPaper(
+            source_path=str(path),
+            page_count=len(pages),
+            mcqs=_dedupe(mcqs),
+            warnings=warnings,
+        )
 
-    return ExtractedPaper(
-        source_path=str(path),
-        page_count=len(pages),
-        mcqs=_dedupe(mcqs),
-        warnings=warnings,
-    )
+    if answer_key:
+        from syllabus_expert.heuristic import apply_answer_key, parse_answer_key
+
+        key_pages = extract_pages(answer_key)
+        mapping, key_warnings = parse_answer_key(key_pages)
+        paper.warnings.extend(key_warnings)
+        paper.warnings.extend(apply_answer_key(paper.mcqs, mapping))
+
+    return paper
 
 
 def _should_escalate(mcqs: list[MCQ], pages: list) -> bool:

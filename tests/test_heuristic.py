@@ -129,6 +129,46 @@ All four
     assert not any("Skipped incomplete" in w for w in warnings)
 
 
+def test_parse_and_apply_answer_key():
+    from syllabus_expert.heuristic import apply_answer_key, parse_answer_key
+
+    key_text = """
+Practice Paper of NEET (UG) - 06 - Answer Key
+Q1.
+c
+Since Idisc = ½MR², kdisc = R/√2.
+Q2.
+a
+Torque is zero so L is constant.
+Q3.
+b
+"""
+    mapping, warnings = parse_answer_key(
+        [PageText(page=1, text=key_text, char_count=len(key_text))]
+    )
+    assert mapping["1"][0] == "C"
+    assert "kdisc" in (mapping["1"][1] or "")
+    assert mapping["2"] == ("A", "Torque is zero so L is constant.")
+    assert mapping["3"][0] == "B"
+    assert not warnings
+
+    mcqs, _ = parse_mcqs(
+        [
+            PageText(
+                page=1,
+                text="Q1.\nStem one?\nA.\none\nB.\ntwo\nC.\nthree\nD.\nfour\n"
+                "Q2.\nStem two?\nA.\nx\nB.\ny\nC.\nz\nD.\nw\n",
+                char_count=80,
+            )
+        ]
+    )
+    apply_warnings = apply_answer_key(mcqs, mapping)
+    assert mcqs[0].answer == "C"
+    assert "kdisc" in (mcqs[0].explanation or "")
+    assert mcqs[1].answer == "A"
+    assert any("1 item" in w for w in apply_warnings)
+
+
 def test_empty_text_warns():
     mcqs, warnings = parse_mcqs([PageText(page=1, text="Syllabus only.", char_count=14)])
     assert mcqs == []

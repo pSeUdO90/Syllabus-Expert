@@ -32,9 +32,17 @@ def extract(
         "-m",
         help="auto | heuristic | agent. agent needs OPENAI_API_KEY.",
     ),
+    answers: Optional[Path] = typer.Option(
+        None,
+        "--answers",
+        "-a",
+        exists=True,
+        readable=True,
+        help="Answer-key PDF to map letters and explanations onto questions.",
+    ),
 ) -> None:
     """Extract MCQs from a PDF and print JSON."""
-    paper = extract_mcqs(pdf, mode=mode)
+    paper = extract_mcqs(pdf, mode=mode, answer_key=answers)
     _write(paper, output)
     _print_summary(paper)
 
@@ -89,6 +97,9 @@ def _print_summary(paper: ExtractedPaper) -> None:
         f"Extracted {len(paper.mcqs)} MCQ(s) from {paper.page_count} page(s).",
         err=True,
     )
+    answered = sum(1 for mcq in paper.mcqs if mcq.answer)
+    if answered:
+        typer.echo(f"Mapped {answered} answer(s) from the answer key.", err=True)
     for warning in paper.warnings:
         typer.echo(f"warning: {warning}", err=True)
 

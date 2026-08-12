@@ -68,6 +68,14 @@ Heuristic only (no network):
 syllabus-expert extract path/to/paper.pdf -o questions.json --mode heuristic
 ```
 
+With a separate answer-key PDF (maps `Q1. c` letters and explanations onto the questions):
+
+```bash
+syllabus-expert extract path/to/paper.pdf \
+  --answers path/to/answer-key.pdf \
+  -o questions.json --mode heuristic
+```
+
 CSV:
 
 ```bash

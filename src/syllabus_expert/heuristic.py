@@ -52,6 +52,7 @@ INLINE_FOOTER = re.compile(
     r"\s*Page\s+\d+\s+of\s+\d+(?:\s*Contact:\s*\d+)?\s*",
     re.IGNORECASE,
 )
+LETTER_ONLY = re.compile(r"^\s*([A-Da-d])\s*$")
 
 
 def parse_mcqs(pages: list[PageText]) -> tuple[list[MCQ], list[str]]:
@@ -204,3 +205,86 @@ class _Draft:
             page=self.page,
             source="heuristic",
         )
+
+
+def parse_answer_key(pages: list[PageText]) -> tuple[dict[str, tuple[str, str | None]], list[str]]:
+    """Parse a NEET-style key: Q1. / c / explanation..."""
+    warnings: list[str] = []
+    mapping: dict[str, tuple[str, str | None]] = {}
+    current_number: str | None = None
+    current_letter: str | None = None
+    explanation: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_number, current_letter, explanation
+        if current_number and current_letter:
+            text = " ".join(" ".join(explanation).split()) or None
+            mapping[current_number] = (current_letter, text)
+        elif current_number:
+            warnings.append(f"Answer key item Q{current_number} had no letter.")
+        current_number = None
+        current_letter = None
+        explanation = []
+
+    for page in pages:
+        for raw in page.text.splitlines():
+            stripped = INLINE_FOOTER.sub(" ", raw).strip()
+            if not stripped or PAGE_MARKER.match(stripped) or SKIP_LINE.match(stripped):
+                continue
+
+            q_match = Q_START.match(stripped)
+            if q_match:
+                flush()
+                current_number = q_match.group(1)
+                rest = q_match.group(2).strip()
+                if rest:
+                    letter_match = LETTER_ONLY.match(rest)
+                    if letter_match:
+                        current_letter = letter_match.group(1).upper()
+                    else:
+                        explanation.append(rest)
+                continue
+
+            if current_number is None:
+                continue
+
+            if current_letter is None:
+                letter_match = LETTER_ONLY.match(stripped)
+                if letter_match:
+                    current_letter = letter_match.group(1).upper()
+                    continue
+
+            explanation.append(stripped)
+
+    flush()
+    if not mapping:
+        warnings.append("No Q-numbered answers found in the answer-key PDF.")
+    return mapping, warnings
+
+
+def apply_answer_key(
+    mcqs: list[MCQ], mapping: dict[str, tuple[str, str | None]]
+) -> list[str]:
+    """Copy letters and explanations onto MCQs that share a question number."""
+    warnings: list[str] = []
+    used: set[str] = set()
+    for mcq in mcqs:
+        if not mcq.number or mcq.number not in mapping:
+            continue
+        letter, text = mapping[mcq.number]
+        mcq.answer = letter
+        if text:
+            mcq.explanation = text
+        used.add(mcq.number)
+
+    missing = [mcq.number for mcq in mcqs if mcq.number and mcq.number not in mapping]
+    extra = [number for number in mapping if number not in used]
+    if missing:
+        preview = ", ".join(f"Q{n}" for n in missing[:12])
+        more = f" (+{len(missing) - 12} more)" if len(missing) > 12 else ""
+        warnings.append(f"Answer key missing {len(missing)} question(s): {preview}{more}")
+    if extra:
+        warnings.append(
+            f"Answer key has {len(extra)} item(s) with no matching question."
+        )
+    return warnings
