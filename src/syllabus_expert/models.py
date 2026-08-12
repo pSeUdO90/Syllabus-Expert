@@ -30,8 +30,10 @@ class MCQ(BaseModel):
 
 
 class ExtractedPaper(BaseModel):
-    source_path: str
-    page_count: int
+    id: int | None = None
+    source_path: str = ""
+    answer_key_path: str | None = None
+    page_count: int = 0
     title: str | None = None
     exam: str | None = None
     language: str = "English"

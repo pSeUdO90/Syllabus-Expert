@@ -174,6 +174,28 @@
     .modal textarea { min-height: 90px; resize: vertical; width: 100%; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
     .empty { padding: 48px 22px; text-align: center; color: var(--muted); }
+    .file-box {
+      border: 1px dashed var(--line); border-radius: 12px; padding: 12px;
+      background: #171c27;
+    }
+    .file-box strong { display: block; margin-bottom: 8px; }
+    .file-box input[type="file"] { width: 100%; }
+    .hint { color: var(--muted); font-size: 12px; margin: 0; }
+    .overlay {
+      position: fixed; inset: 0; background: rgba(8,10,16,.72); display: none;
+      align-items: center; justify-content: center; z-index: 40; text-align: center;
+    }
+    .overlay.open { display: flex; }
+    .overlay .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+      padding: 28px 32px; box-shadow: var(--shadow); max-width: 420px;
+    }
+    .spinner {
+      width: 28px; height: 28px; border: 3px solid var(--line);
+      border-top-color: var(--green); border-radius: 50%;
+      margin: 0 auto 12px; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -203,7 +225,7 @@
         <button class="ghost" id="add-btn">+ Add Manually</button>
         <button class="ghost" id="upload-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
-          Upload DOCX
+          Upload PDFs
         </button>
         <button class="btn primary" id="publish-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
@@ -214,6 +236,9 @@
 
     <div class="filters">
       <div class="left">
+        <label class="field">Paper
+          <select id="paper-select"></select>
+        </label>
         <label class="field">Filter Subject
           <select id="subject-filter"></select>
         </label>
@@ -262,9 +287,41 @@
     </div>
   </div>
 
+  <div class="modal-bg" id="upload-modal">
+    <div class="modal">
+      <h3>Upload question paper</h3>
+      <p class="hint">Extract MCQs from a question PDF and optionally map an answer-key PDF, then save to the database.</p>
+      <div class="grid" style="margin-top:12px">
+        <input id="upload-title" type="text" placeholder="Title (optional — taken from the PDF if blank)" />
+        <input id="upload-exam" type="text" placeholder="Exam (e.g. NEET (UG))" />
+        <label class="file-box">
+          <strong>Question paper PDF</strong>
+          <input id="upload-paper" type="file" accept="application/pdf,.pdf" />
+        </label>
+        <label class="file-box">
+          <strong>Answer key PDF (optional)</strong>
+          <input id="upload-answers" type="file" accept="application/pdf,.pdf" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost" id="upload-cancel">Cancel</button>
+        <button class="btn primary" id="upload-run">Extract &amp; save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="busy">
+    <div class="panel">
+      <div class="spinner"></div>
+      <strong>Extracting questions…</strong>
+      <p class="hint" id="busy-msg">Reading the PDF, parsing MCQs, and mapping the answer key.</p>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
     let paper = null;
+    let papers = [];
     let filter = "All Subjects";
     let index = 0;
     let editing = false;
@@ -287,14 +344,23 @@
       setTimeout(() => { el.style.display = "none"; }, 2200);
     };
 
-    async function load() {
-      const res = await fetch("/api/paper");
+    async function load(paperId) {
+      const listRes = await fetch("/api/papers");
+      papers = await listRes.json();
+      const query = paperId ? `?id=${paperId}` : "";
+      const res = await fetch("/api/paper" + query);
       paper = await res.json();
+      if (paper.error) throw new Error(paper.error);
+      index = 0;
+      filter = "All Subjects";
+      editing = false;
+      solutionOpen = false;
       renderChrome();
       renderCard();
     }
 
     async function save(message) {
+      if (!paper) return;
       const res = await fetch("/api/paper", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -304,6 +370,11 @@
         toast("Save failed");
         return;
       }
+      const result = await res.json();
+      paper.id = result.id;
+      const listRes = await fetch("/api/papers");
+      papers = await listRes.json();
+      renderChrome();
       if (message) toast(message);
     }
 
@@ -317,6 +388,12 @@
       const total = (paper.mcqs || []).length;
       const ready = (paper.mcqs || []).filter((q) => q.question && (q.options || []).length >= 2).length;
       $("summary").textContent = `${ready} / ${total} QUESTIONS GENERATED`;
+
+      $("paper-select").innerHTML = (papers.length ? papers : [{
+        id: paper.id, title: paper.title || "Untitled assessment", question_count: total
+      }]).map((item) =>
+        `<option value="${item.id ?? ""}" ${String(item.id) === String(paper.id) ? "selected" : ""}>${esc(item.title)} (${item.question_count ?? total})</option>`
+      ).join("") || `<option>No papers yet</option>`;
 
       const subjects = ["All Subjects", ...new Set((paper.mcqs || []).map((q) => q.subject || "General"))];
       $("subject-filter").innerHTML = subjects.map((s) =>
@@ -463,7 +540,42 @@
       await save(paper.status === "published" ? "Published" : "Moved back to draft");
       renderChrome();
     };
-    $("upload-btn").onclick = () => toast("DOCX upload is not enabled yet. Use extract from PDF.");
+    $("upload-btn").onclick = () => { $("upload-modal").style.display = "flex"; };
+    $("upload-cancel").onclick = () => { $("upload-modal").style.display = "none"; };
+    $("paper-select").onchange = () => {
+      const id = $("paper-select").value;
+      if (id) load(id);
+    };
+    $("upload-run").onclick = async () => {
+      const paperInput = $("upload-paper");
+      if (!paperInput.files.length) {
+        toast("Choose a question paper PDF");
+        return;
+      }
+      const data = new FormData();
+      data.append("paper", paperInput.files[0]);
+      if ($("upload-answers").files.length) data.append("answers", $("upload-answers").files[0]);
+      if ($("upload-title").value.trim()) data.append("title", $("upload-title").value.trim());
+      if ($("upload-exam").value.trim()) data.append("exam", $("upload-exam").value.trim());
+      $("upload-modal").style.display = "none";
+      $("busy").classList.add("open");
+      try {
+        const res = await fetch("/api/ingest", { method: "POST", body: data });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || "Ingest failed");
+        paper = payload;
+        papers = await (await fetch("/api/papers")).json();
+        index = 0;
+        filter = "All Subjects";
+        renderChrome();
+        renderCard();
+        toast(`Saved ${paper.mcqs.length} question(s) to the database`);
+      } catch (err) {
+        toast(String(err.message || err));
+      } finally {
+        $("busy").classList.remove("open");
+      }
+    };
     $("add-btn").onclick = () => { $("modal-bg").style.display = "flex"; };
     $("modal-cancel").onclick = () => { $("modal-bg").style.display = "none"; };
     $("modal-save").onclick = async () => {
@@ -500,7 +612,7 @@
     });
 
     load().catch((err) => {
-      $("card").innerHTML = `<div class="empty">Failed to load questions: ${esc(err)}</div>`;
+      $("card").innerHTML = `<div class="empty">Failed to load questions: ${esc(err)}. Use <strong>Upload PDFs</strong> to import a paper.</div>`;
     });
   </script>
 </body>

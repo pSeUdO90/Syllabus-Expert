@@ -98,13 +98,15 @@ Debug the parser on plain text:
 syllabus-expert from-text extracted.txt -o questions.json
 ```
 
-Review the extracted bank in a local dark-mode UI (edit, delete, filter by subject, show solutions):
+Review the extracted bank in a local dark-mode UI (edit, delete, filter by subject, show solutions). Papers are stored in SQLite. Upload a question PDF and optional answer-key PDF to run extract → map → save:
 
 ```bash
+syllabus-expert review
+# or import an existing JSON bank first:
 syllabus-expert review questions.json
 ```
 
-Then open http://127.0.0.1:8765
+Then open http://127.0.0.1:8765 and use **Upload PDFs**. The database defaults to `data/syllabus_expert.db`.
 
 ## Output shape
 

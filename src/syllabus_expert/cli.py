@@ -71,8 +71,13 @@ def from_text(
 
 @app.command()
 def review(
-    json_file: Path = typer.Argument(
-        ..., exists=True, readable=True, help="questions.json from extract."
+    json_file: Optional[Path] = typer.Argument(
+        None, help="Optional questions.json to import into the database."
+    ),
+    db: Path = typer.Option(
+        Path("data/syllabus_expert.db"),
+        "--db",
+        help="SQLite database path.",
     ),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     port: int = typer.Option(8765, "--port", "-p", help="Port for the review UI."),
@@ -80,19 +85,35 @@ def review(
         True, "--open/--no-open", help="Open the UI in a browser."
     ),
 ) -> None:
-    """Open a local Review Assessment UI for extracted questions."""
+    """Open the Review Assessment UI (database-backed)."""
     import webbrowser
 
+    from syllabus_expert.db import save_paper
+    from syllabus_expert.review.enrich import enrich_mcq
     from syllabus_expert.review.server import serve
+
+    if json_file is not None:
+        if not json_file.exists():
+            raise typer.BadParameter(f"File not found: {json_file}")
+        paper = ExtractedPaper.model_validate_json(json_file.read_text(encoding="utf-8"))
+        for mcq in paper.mcqs:
+            enrich_mcq(mcq)
+        if not paper.title:
+            paper.title = json_file.stem.replace("_", " ")
+        if not paper.exam:
+            paper.exam = "NEET (UG)"
+        paper_id = save_paper(db, paper)
+        typer.echo(f"Imported {len(paper.mcqs)} question(s) as paper #{paper_id} into {db}")
 
     url = f"http://{host}:{port}"
     typer.echo(f"Opening review UI at {url}")
+    typer.echo(f"Database: {db.resolve()}")
     if open_browser:
         try:
             webbrowser.open(url)
         except Exception:
             pass
-    serve(json_file, host=host, port=port)
+    serve(db, host=host, port=port)
 
 
 def _write(paper: ExtractedPaper, output: Path | None) -> None:
