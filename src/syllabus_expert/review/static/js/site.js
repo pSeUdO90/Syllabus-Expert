@@ -1,4 +1,4 @@
-(function () {
+function highlightNav() {
   const file = (location.pathname.split("/").pop() || "index.html").replace(/\/$/, "") || "index.html";
   const current = file.replace(/\.html$/, "") || "index";
   document.querySelectorAll(".site-nav nav a[href]").forEach((a) => {
@@ -8,7 +8,12 @@
       a.classList.add("active");
     }
   });
-})();
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", highlightNav);
+} else {
+  highlightNav();
+}
 
 window.SE = {
   tokenKey: "se_session",
@@ -84,20 +89,27 @@ window.SE = {
       ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
     });
   },
-  async getJson(path) {
-    const res = await fetch(this.url(path), {
+  async request(path, options) {
+    const opts = options || {};
+    const res = await fetch(this.url(path), Object.assign({}, opts, {
       credentials: "same-origin",
-      headers: this.authHeaders(),
-    });
+      headers: this.authHeaders(opts.headers || {}),
+    }));
+    if (res.status === 401 && !this.isLoginPage()) {
+      location.href = "login.html";
+    }
+    return res;
+  },
+  async getJson(path) {
+    const res = await this.request(path);
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || res.statusText);
     return payload;
   },
   async postJson(path, body) {
-    const res = await fetch(this.url(path), {
+    const res = await this.request(path, {
       method: "POST",
-      credentials: "same-origin",
-      headers: this.authHeaders({ "Content-Type": "application/json" }),
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
     });
     const payload = await res.json();

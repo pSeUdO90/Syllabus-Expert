@@ -83,8 +83,8 @@ def render_html(name: str) -> bytes:
     script = f"<script>\n{js}\n</script>"
     for href in ('href="css/site.css"', 'href="/css/site.css"'):
         html = html.replace(f'<link rel="stylesheet" {href} />', style)
-    if "</body>" in html:
-        html = html.replace("</body>", script + "\n</body>", 1)
+    if "<head>" in html:
+        html = html.replace("<head>", "<head>\n" + style + "\n" + script, 1)
     return html.encode("utf-8")
 
 

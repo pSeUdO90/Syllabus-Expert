@@ -174,7 +174,7 @@
       $("user-rows").querySelectorAll("[data-del-user]").forEach((btn) => {
         btn.onclick = async () => {
           if (!confirm("Delete this user?")) return;
-          const res = await fetch(SE.url("/api/users?id=" + btn.dataset.delUser), { method: "DELETE" });
+          const res = await SE.request("/api/users?id=" + btn.dataset.delUser, { method: "DELETE" });
           const payload = await res.json();
           if (!res.ok) return SE.toast(payload.error || "Failed");
           loadUsers();
@@ -212,7 +212,7 @@
     }
 
     async function del(path) {
-      const res = await fetch(SE.url(path), { method: "DELETE" });
+      const res = await SE.request(path, { method: "DELETE" });
       const payload = await res.json();
       if (!res.ok) return SE.toast(payload.error || "Failed");
       loadTaxonomy();
@@ -234,7 +234,7 @@
       `).join("") || `<tr><td colspan="5" class="hint">No tests yet</td></tr>`;
       $("test-rows").querySelectorAll("[data-del-test]").forEach((b) => {
         b.onclick = async () => {
-          await fetch(SE.url("/api/tests?id=" + b.dataset.delTest), { method: "DELETE" });
+          await SE.request("/api/tests?id=" + b.dataset.delTest, { method: "DELETE" });
           loadTests();
         };
       });
